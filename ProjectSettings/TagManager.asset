@@ -9,6 +9,7 @@ TagManager:
   - Net
   - OutOfBounds
   - Bot
+  - Ball
   layers:
   - Default
   - TransparentFX
