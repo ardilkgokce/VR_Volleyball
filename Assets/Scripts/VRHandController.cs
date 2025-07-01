@@ -191,10 +191,21 @@ public class VRHandController : MonoBehaviour
         Vector3 spin = Vector3.Cross(Vector3.up, direction) * 5f;
         ballRb.angularVelocity = spin;
         
-        // Notify bot system
+        // ÖNCELİK SIRASI ÖNEMLİ:
+        // 1. Önce bot sistemini bilgilendir
         NotifyBotSystem();
         
+        // 2. Sonra tahmin sistemini çalıştır (velocity set edildikten sonra)
+        StartCoroutine(NotifyPredictionDelayed(ballRb));
+        
         Debug.Log($"VR Hand hit ball! Speed: {force:F1}, Direction: {direction}");
+    }
+    
+    // Velocity'nin oturması için küçük bir gecikme
+    System.Collections.IEnumerator NotifyPredictionDelayed(Rigidbody ballRb)
+    {
+        yield return new WaitForFixedUpdate(); // Fizik güncellemesini bekle
+        NotifyBallPrediction(ballRb);
     }
     
     void OnSuccessfulHit(Vector3 hitPoint)
@@ -235,6 +246,15 @@ public class VRHandController : MonoBehaviour
         }
         
         Debug.Log($"VR Player hit the ball - all bots can now catch!");
+    }
+    
+    void NotifyBallPrediction(Rigidbody ballRb)
+    {
+        // Botlara topun düşeceği yeri haber ver
+        if (ballRb != null)
+        {
+            BotController.OnVRPlayerHitBall(ballRb.position, ballRb.velocity);
+        }
     }
     
     void SendHapticFeedback()

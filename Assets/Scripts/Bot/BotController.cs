@@ -20,6 +20,13 @@ public class BotController : MonoBehaviour
     public float throwForce = 10f;
     public float throwHeight = 5f;
     
+    [Header("Movement Settings")]
+    public float moveSpeed = 4f;
+    public float runSpeed = 6f;
+    public float stoppingDistance = 0.5f;
+    public bool enableMovement = true;
+    public float maxMoveDistance = 20f; // Maksimum hareket mesafesi
+    
     [Header("References")]
     private Transform targetBot;
     private GameObject ball;
@@ -47,6 +54,16 @@ public class BotController : MonoBehaviour
     private Transform myTransform;
     private static readonly Vector3 catchOffset = Vector3.up * 1.5f;
     private WaitForSeconds colorResetDelay;
+    
+    // Movement
+    private Vector3 targetMovePosition;
+    private bool isMovingToBall = false;
+    private static BotController activeCatcher = null; // Hangi bot topu yakalamaya gidiyor
+    
+    // Ball prediction
+    private static Vector3 predictedLandingPoint;
+    private static bool isPredictionValid = false;
+    private static float lastPredictionTime;
     
     // Top tracking cache
     private static GameObject cachedBall;
@@ -78,16 +95,30 @@ public class BotController : MonoBehaviour
             hasBallColor = new Color(1f, 0f, 0f);
         }
         
-        // Tüm botları cache'le
-        if (allBots == null || allBots.Length == 0)
-        {
-            allBots = FindObjectsOfType<BotController>();
-        }
-        
         // Başlangıçta yakalama izni ver
         canCatchBall = true;
         
         Debug.Log($"{gameObject.name} başlatıldı. Team: {team}, CanCatch: {canCatchBall}");
+        
+        // Biraz gecikmeyle tüm botları bul (tüm botlar oluşturulduktan sonra)
+        StartCoroutine(CacheAllBotsDelayed());
+    }
+    
+    System.Collections.IEnumerator CacheAllBotsDelayed()
+    {
+        // Tüm botların oluşturulmasını bekle
+        yield return new WaitForSeconds(0.1f);
+        
+        // Tüm botları cache'le
+        allBots = FindObjectsOfType<BotController>();
+        Debug.Log($"Cached {allBots.Length} bots in total");
+        
+        // Debug - tüm botları listele
+        for (int i = 0; i < allBots.Length; i++)
+        {
+            if (allBots[i] != null)
+                Debug.Log($"Bot {i}: {allBots[i].gameObject.name}");
+        }
     }
     
     void Update()
@@ -106,6 +137,12 @@ public class BotController : MonoBehaviour
         
         // Topu takip et
         TrackBall();
+        
+        // Hareket sistemi - sadece aktif yakalayıcı hareket etsin
+        if (enableMovement && isMovingToBall && !hasBall && activeCatcher == this)
+        {
+            MoveToTarget();
+        }
     }
     
     void CheckForBall()
@@ -156,6 +193,13 @@ public class BotController : MonoBehaviour
                         {
                             ball = cachedBall;
                             ballRb = cachedBallRb;
+                            
+                            // Hareket ediyorsa durdur
+                            if (isMovingToBall)
+                            {
+                                StopMoving();
+                            }
+                            
                             InstantThrow();
                             break;
                         }
@@ -367,9 +411,194 @@ public class BotController : MonoBehaviour
             Debug.Log($"{gameObject.name} artık topu yakalayabilir!");
     }
     
+    // VR oyuncu topa vurduğunda çağrılacak (static method)
+    public static void OnVRPlayerHitBall(Vector3 ballPosition, Vector3 ballVelocity)
+    {
+        // Önceki aktif yakalayıcıyı durdur
+        if (activeCatcher != null)
+        {
+            activeCatcher.StopMoving();
+        }
+        activeCatcher = null;
+        
+        // Topun düşeceği noktayı hesapla
+        predictedLandingPoint = PredictBallLandingPoint(ballPosition, ballVelocity);
+        isPredictionValid = true;
+        lastPredictionTime = Time.time;
+        
+        Debug.Log($"VR Player hit ball! Predicted landing: {predictedLandingPoint}");
+        
+        // En yakın botu bul ve harekete geçir
+        FindAndActivateClosestBot();
+    }
+    
+    // En yakın botu bul ve aktif et
+    static void FindAndActivateClosestBot()
+    {
+        // Eğer bot listesi boşsa tekrar dene
+        if (allBots == null || allBots.Length == 0)
+        {
+            allBots = FindObjectsOfType<BotController>();
+            Debug.LogWarning($"Bot list was empty, refetched: {allBots.Length} bots found");
+        }
+        
+        if (!isPredictionValid || allBots == null || allBots.Length == 0)
+        {
+            Debug.LogError("Cannot find closest bot - no valid bots or prediction!");
+            return;
+        }
+        
+        Debug.Log($"Finding closest bot to landing point: {predictedLandingPoint}");
+        Debug.Log($"Total bots available: {allBots.Length}");
+        
+        BotController closestBot = null;
+        float closestDistance = float.MaxValue;
+        int validBotCount = 0;
+        
+        // Tüm botları kontrol et
+        for (int i = 0; i < allBots.Length; i++)
+        {
+            BotController bot = allBots[i];
+            if (bot != null)
+            {
+                float distance = Vector3.Distance(bot.transform.position, predictedLandingPoint);
+                
+                // Debug - her botu logla
+                Debug.Log($"Bot[{i}] {bot.gameObject.name} - CanCatch: {bot.canCatchBall}, HasBall: {bot.hasBall}, Distance: {distance:F2}, Position: {bot.transform.position}");
+                
+                if (bot.canCatchBall && !bot.hasBall)
+                {
+                    validBotCount++;
+                    if (distance < closestDistance)
+                    {
+                        closestDistance = distance;
+                        closestBot = bot;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Bot[{i}] is null!");
+            }
+        }
+        
+        Debug.Log($"Valid bots for catching: {validBotCount}");
+        
+        // En yakın botu aktif et
+        if (closestBot != null)
+        {
+            // Mesafe kontrolünü kaldır veya artır
+            if (closestDistance < 20f) // Detection radius kontrolünü 20f'e çıkardım
+            {
+                closestBot.StartMovingToBall(predictedLandingPoint);
+                activeCatcher = closestBot;
+                Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving! Distance: {closestDistance:F2}");
+            }
+            else
+            {
+                Debug.LogWarning($"Closest bot {closestBot.gameObject.name} is too far: {closestDistance:F2}");
+            }
+        }
+        else
+        {
+            Debug.LogError($"No valid bot found! Total: {allBots.Length}, Valid: {validBotCount}");
+        }
+    }
+    
+    // Topun düşeceği noktayı hesapla
+    static Vector3 PredictBallLandingPoint(Vector3 startPos, Vector3 velocity)
+    {
+        float groundHeight = 0.5f; // Yere düşme yüksekliği
+        float gravity = Mathf.Abs(Physics.gravity.y);
+        
+        // Yere düşme zamanını hesapla (quadratic formula)
+        float a = -0.5f * gravity;
+        float b = velocity.y;
+        float c = startPos.y - groundHeight;
+        
+        float discriminant = b * b - 4 * a * c;
+        if (discriminant < 0) return startPos; // Hesaplanamıyor
+        
+        float t1 = (-b - Mathf.Sqrt(discriminant)) / (2 * a);
+        float t2 = (-b + Mathf.Sqrt(discriminant)) / (2 * a);
+        float timeToGround = Mathf.Max(t1, t2); // Pozitif olanı al
+        
+        if (timeToGround < 0) return startPos;
+        
+        // Düşme noktasını hesapla
+        Vector3 landingPoint = new Vector3(
+            startPos.x + velocity.x * timeToGround,
+            groundHeight,
+            startPos.z + velocity.z * timeToGround
+        );
+        
+        return landingPoint;
+    }
+    
+    // Bu bot topu yakalamaya gitmeli mi kontrol et - ARTIK KULLANILMIYOR
+    void CheckIfShouldMoveToball()
+    {
+        // Bu metod artık kullanılmıyor, FindAndActivateClosestBot() kullanılıyor
+    }
+    
+    // Hedefe doğru hareket başlat
+    void StartMovingToBall(Vector3 targetPos)
+    {
+        targetMovePosition = targetPos;
+        isMovingToBall = true;
+        Debug.Log($"{gameObject.name} started moving to position: {targetPos}");
+    }
+    
+    // Hareketi durdur
+    void StopMoving()
+    {
+        isMovingToBall = false;
+        if (activeCatcher == this)
+        {
+            activeCatcher = null;
+            Debug.Log($"{gameObject.name} stopped moving");
+        }
+    }
+    
+    // Hedefe doğru hareket et
+    void MoveToTarget()
+    {
+        Vector3 direction = targetMovePosition - myTransform.position;
+        direction.y = 0; // Y eksenini sıfırla
+        
+        float distance = direction.magnitude;
+        
+        // Hedefe ulaştıysa dur
+        if (distance < stoppingDistance)
+        {
+            StopMoving();
+            return;
+        }
+        
+        // Hareket hızını belirle (uzaksa koş, yakınsa yürü)
+        float currentSpeed = distance > 3f ? runSpeed : moveSpeed;
+        
+        // Hareket et
+        Vector3 movement = direction.normalized * currentSpeed * Time.deltaTime;
+        myTransform.position += movement;
+        
+        // Hedefe bak
+        if (direction != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime * 2f);
+        }
+    }
+    
     // Topu bulunduğu yerden anında fırlat
     void InstantThrow()
     {
+        // Aktif yakalayıcıyı temizle
+        if (activeCatcher == this)
+        {
+            StopMoving();
+        }
+        
         // Rastgele hedef seç
         targetBot = GetRandomTarget();
         
@@ -482,12 +711,37 @@ public class BotController : MonoBehaviour
         // Yakalama alanı
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position, catchRadius);
+        
+        // Hareket hedefi
+        if (isMovingToBall)
+        {
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawLine(transform.position, targetMovePosition);
+            Gizmos.DrawWireSphere(targetMovePosition, 0.5f);
+        }
     }
     
     // Play modda trajectory'i göster
     void OnDrawGizmos()
     {
         if (!Application.isPlaying || !showTrajectory) return;
+        
+        // Tahmin edilen düşme noktasını göster
+        if (isPredictionValid && Time.time - lastPredictionTime < 2f)
+        {
+            Gizmos.color = new Color(1f, 0f, 1f, 0.5f); // Mor
+            Gizmos.DrawWireSphere(predictedLandingPoint, 0.5f);
+            Gizmos.DrawLine(predictedLandingPoint + Vector3.up * 3f, predictedLandingPoint);
+            
+            // Aktif yakalayıcıyı göster
+            if (activeCatcher == this)
+            {
+                Gizmos.color = Color.green;
+                Gizmos.DrawLine(transform.position, predictedLandingPoint);
+            }
+        }
+        
+        // Mevcut gizmo kodları...
         
         // Eğer top havadaysa ve bu bot atmışsa trajectory göster
         if (ball == null && landingPoint != Vector3.zero)
