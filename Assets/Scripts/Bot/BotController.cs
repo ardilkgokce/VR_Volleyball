@@ -6,7 +6,9 @@ public enum Team
 {
     Red,
     Blue
-}
+   
+    }
+
 public class BotController : MonoBehaviour
 {
     [Header("Team Settings")]
@@ -24,8 +26,9 @@ public class BotController : MonoBehaviour
     private Rigidbody ballRb;
     private bool hasBall = false;
     private float catchCooldown = 0f;
-    [HideInInspector] public bool canCatchBall = true;
-    private Transform lastThrower;
+    [HideInInspector] 
+    public bool canCatchBall = true;
+    public Transform lastThrower;
     
     [Header("Visual")]
     public Color normalColor = Color.blue;
@@ -76,7 +79,15 @@ public class BotController : MonoBehaviour
         }
         
         // Tüm botları cache'le
-        allBots = FindObjectsOfType<BotController>();
+        if (allBots == null || allBots.Length == 0)
+        {
+            allBots = FindObjectsOfType<BotController>();
+        }
+        
+        // Başlangıçta yakalama izni ver
+        canCatchBall = true;
+        
+        Debug.Log($"{gameObject.name} başlatıldı. Team: {team}, CanCatch: {canCatchBall}");
     }
     
     void Update()
@@ -99,13 +110,19 @@ public class BotController : MonoBehaviour
     
     void CheckForBall()
     {
+        // Debug için kontrol
+        if (Time.frameCount % 60 == 0 && showTrajectory)
+        {
+            Debug.Log($"{gameObject.name} - CanCatch: {canCatchBall}, Cooldown: {catchCooldown:F2}");
+        }
+        
         // Pre-allocated array kullan
         int layerMask = 1 << LayerMask.NameToLayer("Default");
         colliderCount = Physics.OverlapSphereNonAlloc(myTransform.position, detectionRadius, nearbyColliders, layerMask);
         
         for (int i = 0; i < colliderCount; i++)
         {
-            if (nearbyColliders[i].CompareTag("Ball"))
+            if (nearbyColliders[i] != null && nearbyColliders[i].CompareTag("Ball"))
             {
                 // Cached ball referansını kullan
                 if (cachedBall == null || cachedBall != nearbyColliders[i].gameObject)
@@ -115,26 +132,33 @@ public class BotController : MonoBehaviour
                     cachedBallRb = cachedBall.GetComponent<Rigidbody>();
                 }
                 
-                if (cachedBallRb != null && cachedBallRb.velocity.magnitude > 2f)
+                if (cachedBallRb != null)
                 {
+                    float ballSpeed = cachedBallRb.velocity.magnitude;
                     Vector3 ballPos = cachedBallTransform.position;
                     float distance = Vector3.Distance(myTransform.position, ballPos);
                     
-                    Vector3 ballVelocity = cachedBallRb.velocity;
-                    Vector3 toBall = ballPos - myTransform.position;
-                    
-                    float dotProduct = Vector3.Dot(ballVelocity.normalized, -toBall.normalized);
-                    
-                    if (dotProduct > 0.5f && distance < catchRadius)
+                    // Debug - top hızını göster
+                    if (showTrajectory && Time.frameCount % 30 == 0)
                     {
-                        ball = cachedBall;
-                        ballRb = cachedBallRb;
-                        InstantThrow();
-                        break;
+                        Debug.Log($"{gameObject.name} - Top hızı: {ballSpeed:F2}, Mesafe: {distance:F2}");
                     }
-                    else if (dotProduct > 0.5f && showTrajectory)
+                    
+                    // Hız kontrolünü gevşet (2f'den 0.5f'e düşür)
+                    if (ballSpeed > 0.5f)
                     {
-                        Debug.Log($"{gameObject.name} topu algıladı, yaklaşmasını bekliyor. Mesafe: {distance:F2}");
+                        Vector3 ballVelocity = cachedBallRb.velocity;
+                        Vector3 toBall = ballPos - myTransform.position;
+                        
+                        float dotProduct = Vector3.Dot(ballVelocity.normalized, -toBall.normalized);
+                        
+                        if (dotProduct > 0.3f && distance < catchRadius) // dotProduct eşiğini de düşür
+                        {
+                            ball = cachedBall;
+                            ballRb = cachedBallRb;
+                            InstantThrow();
+                            break;
+                        }
                     }
                 }
             }
@@ -203,10 +227,21 @@ public class BotController : MonoBehaviour
             }
         }
         
+        // VR oyuncuyu da hedef olarak ekle (eğer varsa)
+        GameObject vrPlayer = GameObject.FindWithTag("Player");
+        if (vrPlayer != null)
+        {
+            validTargets.Add(vrPlayer.transform);
+        }
+        
         if (validTargets.Count > 0)
         {
             int randomIndex = Random.Range(0, validTargets.Count);
-            return validTargets[randomIndex];
+            Transform selected = validTargets[randomIndex];
+            
+            Debug.Log($"{gameObject.name} hedef seçti: {selected.name}");
+            
+            return selected;
         }
         
         return null;
@@ -223,30 +258,67 @@ public class BotController : MonoBehaviour
             return;
         }
         
-        BotController targetController = targetBot.GetComponent<BotController>();
-        if (showTrajectory)
-            Debug.Log($"{gameObject.name} ({team}) topu {targetBot.name} ({targetController.team})'e fırlatıyor!");
+        // VR Player mı yoksa Bot mu kontrol et
+        bool isTargetVRPlayer = targetBot.CompareTag("Player");
         
-        hasBall = false;
-        catchCooldown = 0.5f;
-        canCatchBall = false;
-        
-        // TÜM botların yakalama iznini kapat (cache'lenmiş listeyi kullan)
-        for (int i = 0; i < allBots.Length; i++)
+        if (isTargetVRPlayer)
         {
-            allBots[i].canCatchBall = false;
-            allBots[i].lastThrower = myTransform;
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            if (showTrajectory)
+                Debug.Log($"{gameObject.name} ({team}) topu VR Player ({vrProxy.playerTeam})'e fırlatıyor!");
+            
+            hasBall = false;
+            catchCooldown = 0.5f;
+            canCatchBall = false;
+            
+            // TÜM botların yakalama iznini kapat
+            for (int i = 0; i < allBots.Length; i++)
+            {
+                allBots[i].canCatchBall = false;
+                allBots[i].lastThrower = myTransform;
+            }
+            
+            // VR Player'a yakalama izni ver
+            vrProxy.EnableCatching();
+        }
+        else
+        {
+            // Normal bot hedefi - mevcut kod
+            BotController targetController = targetBot.GetComponent<BotController>();
+            if (showTrajectory)
+                Debug.Log($"{gameObject.name} ({team}) topu {targetBot.name} ({targetController.team})'e fırlatıyor!");
+            
+            hasBall = false;
+            catchCooldown = 0.5f;
+            canCatchBall = false;
+            
+            // TÜM botların yakalama iznini kapat
+            for (int i = 0; i < allBots.Length; i++)
+            {
+                allBots[i].canCatchBall = false;
+                allBots[i].lastThrower = myTransform;
+            }
+            
+            // Sadece hedef botun yakalama iznini aç
+            targetController.EnableCatching();
         }
         
-        // Sadece hedef botun yakalama iznini aç
-        targetController.EnableCatching();
-        
-        // Topu serbest bırak
+        // Topu serbest bırak ve fırlat - ortak kod
         ball.transform.SetParent(null);
         ballRb.useGravity = true;
         
-        // Hedef pozisyonu
-        Vector3 targetPosition = targetBot.position + catchOffset;
+        // Hedef pozisyonu - VR için VRPlayerProxy'den al
+        Vector3 targetPosition;
+        if (isTargetVRPlayer)
+        {
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            targetPosition = vrProxy.GetTargetTransform().position;
+        }
+        else
+        {
+            targetPosition = targetBot.position + catchOffset;
+        }
+        
         Vector3 direction = targetPosition - ball.transform.position;
         float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
         
@@ -263,7 +335,7 @@ public class BotController : MonoBehaviour
         v0 *= dragCompensation;
         
         // Hız vektörünü oluştur
-        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * (v0 * Mathf.Cos(angle));
+        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
         finalVelocity.y = v0 * Mathf.Sin(angle);
         
         // Topu fırlat
@@ -303,16 +375,39 @@ public class BotController : MonoBehaviour
         
         if (targetBot == null || ball == null) return;
         
-        BotController targetController = targetBot.GetComponent<BotController>();
-        if (showTrajectory)
-            Debug.Log($"{gameObject.name} ({team}) topu havada yakaladı ve {targetBot.name} ({targetController.team})'e fırlatıyor!");
+        // VR Player mı yoksa Bot mu kontrol et
+        bool isTargetVRPlayer = targetBot.CompareTag("Player");
+        
+        if (isTargetVRPlayer)
+        {
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            if (showTrajectory)
+                Debug.Log($"{gameObject.name} ({team}) topu havada yakaladı ve VR Player ({vrProxy.playerTeam})'e fırlatıyor!");
+        }
+        else
+        {
+            BotController targetController = targetBot.GetComponent<BotController>();
+            if (showTrajectory)
+                Debug.Log($"{gameObject.name} ({team}) topu havada yakaladı ve {targetBot.name} ({targetController.team})'e fırlatıyor!");
+        }
         
         hasBall = true;
         UpdateBotColor();
         
         // Mevcut pozisyondan fırlat
         Vector3 currentBallPosition = ball.transform.position;
-        Vector3 targetPosition = targetBot.position + catchOffset;
+        Vector3 targetPosition;
+        
+        if (isTargetVRPlayer)
+        {
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            targetPosition = vrProxy.GetTargetTransform().position;
+        }
+        else
+        {
+            targetPosition = targetBot.position + catchOffset;
+        }
+        
         Vector3 direction = targetPosition - currentBallPosition;
         float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
         
@@ -329,7 +424,7 @@ public class BotController : MonoBehaviour
         v0 *= dragCompensation;
         
         // Hız vektörünü oluştur
-        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * (v0 * Mathf.Cos(angle));
+        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
         finalVelocity.y = v0 * Mathf.Sin(angle);
         
         // Topu fırlat
@@ -342,10 +437,20 @@ public class BotController : MonoBehaviour
             allBots[i].lastThrower = myTransform;
         }
         
-        // Hedef bot'a yakalama izni ver
+        // Hedef'e yakalama izni ver
         canCatchBall = false;
         catchCooldown = 0.5f;
-        targetController.EnableCatching();
+        
+        if (isTargetVRPlayer)
+        {
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            vrProxy.EnableCatching();
+        }
+        else
+        {
+            BotController targetController = targetBot.GetComponent<BotController>();
+            targetController.EnableCatching();
+        }
         
         // Düşüş noktasını hesapla
         CalculateLandingPoint(currentBallPosition, finalVelocity);
@@ -458,8 +563,26 @@ public class BotController : MonoBehaviour
     {
         if (targetBot == null) return;
         
-        // Hedef yükseklikte düşeceği zamanı bul
-        float targetHeight = targetBot.position.y + 1.5f;
+        // Hedef yüksekliğini tag'e göre belirle
+        float targetHeight;
+        
+        if (targetBot.CompareTag("Player"))
+        {
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null && vrProxy.GetTargetTransform() != null)
+            {
+                targetHeight = vrProxy.GetTargetTransform().position.y;
+            }
+            else
+            {
+                targetHeight = targetBot.position.y + 1.2f; // Varsayılan göğüs hizası
+            }
+        }
+        else
+        {
+            targetHeight = targetBot.position.y + 1.5f; // Bot için normal yükseklik
+        }
+        
         float a = 0.5f * Physics.gravity.y;
         float b = velocity.y;
         float c = startPosition.y - targetHeight;
@@ -503,12 +626,5 @@ public class BotController : MonoBehaviour
         
         // Hemen fırlat
         ThrowBallToTarget();
-    }
-    void OnDestroy()
-    {
-        // Static cache'leri temizle
-        cachedBall = null;
-        cachedBallRb = null;
-        cachedBallTransform = null;
     }
 }

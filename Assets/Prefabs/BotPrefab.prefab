@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 4330958744108699887}
   m_Layer: 0
   m_Name: BotPrefab
-  m_TagString: Untagged
+  m_TagString: Bot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -123,7 +123,6 @@ MonoBehaviour:
   catchRadius: 1.5
   throwForce: 15
   throwHeight: 5
-  targetBot: {fileID: 0}
   canCatchBall: 1
   normalColor: {r: 0, g: 0, b: 1, a: 1}
   hasBallColor: {r: 0, g: 1, b: 0, a: 1}
