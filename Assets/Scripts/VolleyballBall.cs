@@ -1,305 +1,212 @@
 using UnityEngine;
 using System.Collections.Generic;
-using UnityEngine.XR;
-using UnityEngine.XR.Interaction.Toolkit;
 
-[RequireComponent(typeof(Rigidbody))]
-[RequireComponent(typeof(SphereCollider))]
 public class VolleyballBall : MonoBehaviour
 {
-    [Header("Ball Properties")]
-    [SerializeField] private float mass = 0.27f; // Gerçek voleybol topu ağırlığı (kg)
-    [SerializeField] private float drag = 0.5f;
-    [SerializeField] private float angularDrag = 0.3f;
+    [Header("Team Hit Tracking")]
+    public Team currentTeam = Team.Blue; // Şu anda hangi takım oynuyor
+    public int currentTeamHits = 0; // Mevcut takımın vuruş sayısı
+    public int maxHitsPerTeam = 3; // Maksimum vuruş hakkı
     
-    [Header("Hit Detection")]
-    [SerializeField] private float minHitVelocity = 2f; // Minimum vuruş hızı
-    [SerializeField] private LayerMask handLayer; // El layer'ı
-    [SerializeField] private float velocityMultiplier = 1.5f; // El hızı çarpanı
+    [Header("Hit History")]
+    public List<HitInfo> hitHistory = new List<HitInfo>();
+    private Transform lastHitter; // Son vuran
     
-    private Rigidbody rb;
-    private SphereCollider sphereCollider;
-    private Vector3 lastVelocity;
-    private float lastHitTime;
+    [Header("Visual Feedback")]
+    public bool showDebugInfo = true;
+    public Color normalColor = Color.white;
+    public Color warningColor = Color.yellow; // 2 vuruş
+    public Color criticalColor = Color.red; // 3 vuruş
+    private Renderer ballRenderer;
     
-    // El takibi için
-    private Dictionary<Collider, Vector3> handVelocities = new Dictionary<Collider, Vector3>();
-    private Dictionary<Collider, Vector3> lastHandPositions = new Dictionary<Collider, Vector3>();
-    private GameObject[] handObjects;
-    private bool handsAreTouching = false; // İki el temas halinde mi?
-    private Transform leftHand;
-    private Transform rightHand;
+    [Header("Audio")]
+    public AudioClip hitSound;
+    public AudioClip warningSound;
+    private AudioSource audioSource;
     
-    // Events
-    public System.Action<Vector3, float> OnBallHit; // Pozisyon, güç
-    public System.Action<Vector3> OnBallLanded; // Düştüğü pozisyon
+    [System.Serializable]
+    public class HitInfo
+    {
+        public string hitterName;
+        public Team team;
+        public float time;
+        public Vector3 position;
+        
+        public HitInfo(string name, Team t, Vector3 pos)
+        {
+            hitterName = name;
+            team = t;
+            time = Time.time;
+            position = pos;
+        }
+    }
     
     void Start()
     {
-        SetupBall();
-        // Elleri bir kere bul ve kaydet
-        CacheHandObjects();
-    }
-    
-    void CacheHandObjects()
-    {
-        handObjects = GameObject.FindGameObjectsWithTag("Hand");
-        Debug.Log($"Found {handObjects.Length} hand objects");
-        
-        // Sol ve sağ eli bul
-        foreach (var hand in handObjects)
+        ballRenderer = GetComponent<Renderer>();
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
         {
-            if (hand.name.ToLower().Contains("left"))
-                leftHand = hand.transform;
-            else if (hand.name.ToLower().Contains("right"))
-                rightHand = hand.transform;
-        }
-    }
-    
-    void SetupBall()
-    {
-        // Rigidbody ayarları
-        rb = GetComponent<Rigidbody>();
-        rb.mass = mass;
-        rb.drag = drag;
-        rb.angularDrag = angularDrag;
-        rb.useGravity = true;
-        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-        
-        // Collider ayarları
-        sphereCollider = GetComponent<SphereCollider>();
-        transform.localScale = Vector3.one * 0.21f; // Gerçek voleybol topu boyutu
-    }
-    
-    void Update()
-    {
-        // Cached el objelerini kullan
-        if (handObjects != null)
-        {
-            foreach (var hand in handObjects)
-            {
-                if (hand != null) // Null check
-                {
-                    var collider = hand.GetComponent<Collider>();
-                    if (collider != null)
-                    {
-                        TrackHandMovement(collider);
-                    }
-                }
-            }
-        }
-    }
-    
-    void OnCollisionEnter(Collision collision)
-    {
-        // El ile temas kontrolü
-        if (IsHandHit(collision))
-        {
-            ProcessHit(collision);
-        }
-        // Zemin teması kontrolü
-        else if (collision.gameObject.CompareTag("Ground"))
-        {
-            OnBallLanded?.Invoke(transform.position);
-        }
-    }
-    
-    void OnCollisionStay(Collision collision)
-    {
-        // El pozisyonlarını takip et
-        if (IsHandHit(collision))
-        {
-            TrackHandMovement(collision.collider);
-        }
-    }
-    
-    void TrackHandMovement(Collider handCollider)
-    {
-        if (!lastHandPositions.ContainsKey(handCollider))
-        {
-            lastHandPositions[handCollider] = handCollider.transform.position;
-            return;
+            audioSource = gameObject.AddComponent<AudioSource>();
         }
         
-        // El hızını hesapla
-        Vector3 currentPos = handCollider.transform.position;
-        Vector3 lastPos = lastHandPositions[handCollider];
-        Vector3 velocity = (currentPos - lastPos) / Time.fixedDeltaTime;
-        
-        handVelocities[handCollider] = velocity;
-        lastHandPositions[handCollider] = currentPos;
+        UpdateBallColor();
     }
     
-    bool IsHandHit(Collision collision)
+    // Bot veya VR oyuncu topa vurduğunda çağrılacak
+    public bool OnHit(Transform hitter, Team hitterTeam)
     {
-        // Layer kontrolü veya tag kontrolü
-        return collision.gameObject.layer == LayerMask.NameToLayer("Hand") ||
-               collision.gameObject.CompareTag("Hand");
-    }
-    
-    void ProcessHit(Collision collision)
-    {
-        // Çift vuruş engellemesi
-        if (Time.time - lastHitTime < 0.1f) return;
-        
-        lastHitTime = Time.time;
-        
-        Vector3 handVelocity;
-        Vector3 hitPoint;
-        string hitSource;
-        
-        // İki el temas halindeyse merkez noktadan hesapla
-        if (handsAreTouching && leftHand != null && rightHand != null)
+        // Aynı kişi üst üste vuruyorsa (voleybol kuralı)
+        if (lastHitter == hitter)
         {
-            Debug.Log("Dual hand block detected - hands are touching!");
-            
-            // Merkez nokta
-            hitPoint = (leftHand.position + rightHand.position) / 2f;
-            
-            // İki elin ortalama hızı
-            Vector3 leftVel = GetHandVelocity(leftHand.GetComponent<Collider>());
-            Vector3 rightVel = GetHandVelocity(rightHand.GetComponent<Collider>());
-            handVelocity = (leftVel + rightVel) / 2f;
-            
-            // Block bonusu
-            handVelocity *= 1.4f;
-            hitSource = "Dual Hand Block";
+            Debug.LogWarning($"{hitter.name} cannot hit the ball twice in a row!");
+            return false;
+        }
+        
+        // Takım değişti mi kontrol et
+        if (hitterTeam != currentTeam)
+        {
+            // Yeni takım
+            currentTeam = hitterTeam;
+            currentTeamHits = 1;
+            Debug.Log($"Ball passed to {currentTeam} team. Hit count reset to 1.");
         }
         else
         {
-            // Tek el vuruşu
-            handVelocity = GetHandVelocity(collision.collider);
-            hitPoint = collision.contacts[0].point;
-            hitSource = collision.gameObject.name;
+            // Aynı takım devam ediyor
+            currentTeamHits++;
+            
+            if (currentTeamHits > maxHitsPerTeam)
+            {
+                Debug.LogError($"{currentTeam} team exceeded maximum hits ({maxHitsPerTeam})! FAULT!");
+                OnFault(currentTeam);
+                return false;
+            }
+            
+            Debug.Log($"{currentTeam} team hit #{currentTeamHits}/{maxHitsPerTeam}");
         }
         
-        float handSpeed = handVelocity.magnitude;
+        // Vuruş geçmişine ekle
+        hitHistory.Add(new HitInfo(hitter.name, hitterTeam, hitter.position));
+        lastHitter = hitter;
         
-        // Debug bilgileri
-        Debug.Log($"=== HIT DEBUG ===");
-        Debug.Log($"Hit Source: {hitSource}");
-        Debug.Log($"Hand Velocity: {handVelocity}");
-        Debug.Log($"Hand Speed: {handSpeed:F2}");
+        // Görsel ve ses efektleri
+        UpdateBallColor();
+        PlayHitSound();
         
-        // Minimum hız kontrolü
-        if (handSpeed < 0.1f) 
+        // 3. vuruşsa uyarı
+        if (currentTeamHits == maxHitsPerTeam)
         {
-            Debug.Log("Using fallback velocity!");
-            handVelocity = Vector3.up * 3f;
-            handSpeed = handVelocity.magnitude;
+            Debug.LogWarning($"{currentTeam} team must pass to other side! Last hit!");
+            if (warningSound != null && audioSource != null)
+            {
+                audioSource.PlayOneShot(warningSound);
+            }
         }
         
-        // Event tetikle
-        OnBallHit?.Invoke(hitPoint, handSpeed);
-        
-        // Vuruş tipini belirle ve kuvvet uygula
-        HitType hitType = handsAreTouching ? HitType.Set : DetermineHitTypeByVelocity(handVelocity, collision.contacts[0]);
-        Debug.Log($"Hit Type: {hitType}");
-        
-        ApplyHandVelocityHit(handVelocity, hitType);
+        return true;
     }
     
-    Vector3 GetHandVelocity(Collider handCollider)
+    // Top yere düştüğünde veya dışarı çıktığında
+    public void OnBallDrop(Vector3 dropPosition)
     {
-        // Transform'un önceki pozisyonunu takip et
-        if (!lastHandPositions.ContainsKey(handCollider))
+        // Hangi tarafta düştü?
+        Team scoringTeam = dropPosition.x > 0 ? Team.Red : Team.Blue;
+        Debug.Log($"Ball dropped at {dropPosition}. {scoringTeam} team scores!");
+        
+        ResetBall();
+    }
+    
+    // Kural ihlali olduğunda
+    void OnFault(Team faultTeam)
+    {
+        Team scoringTeam = faultTeam == Team.Blue ? Team.Red : Team.Blue;
+        Debug.LogError($"{faultTeam} committed a fault! {scoringTeam} scores!");
+        
+        // TODO: Skor sistemi entegrasyonu
+        
+        ResetBall();
+    }
+    
+    // Topu sıfırla
+    public void ResetBall()
+    {
+        currentTeamHits = 0;
+        lastHitter = null;
+        hitHistory.Clear();
+        UpdateBallColor();
+        
+        Debug.Log("Ball reset for new rally");
+    }
+    
+    // Renk güncelleme
+    void UpdateBallColor()
+    {
+        if (ballRenderer == null) return;
+        
+        if (currentTeamHits == 0)
         {
-            lastHandPositions[handCollider] = handCollider.transform.position;
-            handVelocities[handCollider] = Vector3.zero;
+            ballRenderer.material.color = normalColor;
         }
-        
-        // Pozisyon farkından hız hesapla
-        Vector3 currentPos = handCollider.transform.position;
-        Vector3 lastPos = lastHandPositions[handCollider];
-        Vector3 velocity = (currentPos - lastPos) / Time.deltaTime;
-        
-        // Güncelle
-        lastHandPositions[handCollider] = currentPos;
-        handVelocities[handCollider] = velocity;
-        
-        // Çok küçük hareketleri filtrele
-        if (velocity.magnitude < 0.1f)
+        else if (currentTeamHits == maxHitsPerTeam - 1) // 2 vuruş
         {
-            return Vector3.up * 2f; // Minimum yukarı hız
+            ballRenderer.material.color = warningColor;
         }
-        
-        return velocity * velocityMultiplier;
+        else if (currentTeamHits == maxHitsPerTeam) // 3 vuruş
+        {
+            ballRenderer.material.color = criticalColor;
+        }
+        else
+        {
+            ballRenderer.material.color = normalColor;
+        }
     }
     
-    void ApplyHandVelocityHit(Vector3 handVelocity, HitType hitType)
+    void PlayHitSound()
     {
-        // Basit test için - direkt yukarı fırlat
-        Vector3 force = Vector3.up * 8f + handVelocity * 2f;
-        
-        // Debug
-        Debug.Log($"Applied Force: {force}");
-        
-        // Mevcut hızı sıfırla ve yeni hız uygula
-        rb.velocity = force;
-        
-        // Hafif spin ekle
-        rb.angularVelocity = UnityEngine.Random.insideUnitSphere * 2f;
+        if (hitSound != null && audioSource != null)
+        {
+            audioSource.pitch = 1f + (currentTeamHits - 1) * 0.1f; // Her vuruşta pitch artar
+            audioSource.PlayOneShot(hitSound);
+        }
     }
     
-    HitType DetermineHitTypeByVelocity(Vector3 handVelocity, ContactPoint contact)
+    // Ground collision
+    void OnCollisionEnter(Collision collision)
     {
-        float speed = handVelocity.magnitude;
-        float upwardComponent = Vector3.Dot(handVelocity.normalized, Vector3.up);
-        float downwardComponent = Vector3.Dot(handVelocity.normalized, Vector3.down);
-        
-        // Spike: Hızlı ve aşağı doğru hareket
-        if (speed > 5f && downwardComponent > 0.5f)
-            return HitType.Spike;
-        
-        // Set: Orta hız ve yukarı doğru
-        if (speed < 4f && upwardComponent > 0.5f)
-            return HitType.Set;
-        
-        // Default: Bump
-        return HitType.Bump;
+        if (collision.gameObject.CompareTag("Ground") || collision.gameObject.layer == LayerMask.NameToLayer("Ground"))
+        {
+            OnBallDrop(transform.position);
+        }
     }
     
-    // Bu metodu HandController veya ayrı bir script'te çağırabilirsiniz
-    public void SetHandsTouchingState(bool touching)
+    // Hangi takımın kaç vuruş hakkı kaldı
+    public int GetRemainingHits()
     {
-        handsAreTouching = touching;
-        if (touching)
-            Debug.Log("Hands are now touching - block mode active");
+        return maxHitsPerTeam - currentTeamHits;
     }
     
-    // Top tahmin sistemi için yardımcı metod
-    public Vector3 PredictLandingPoint()
+    // Bot için helper method - karşı takıma mı atmalı?
+    public bool MustPassToOpponent()
     {
-        float timeToGround = CalculateTimeToGround();
-        Vector3 horizontalVelocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);
-        Vector3 landingPoint = transform.position + horizontalVelocity * timeToGround;
-        
-        // Drag hesaba kat (basitleştirilmiş)
-        landingPoint *= (1f - drag * timeToGround * 0.5f);
-        
-        return landingPoint;
+        return currentTeamHits >= maxHitsPerTeam;
     }
     
-    float CalculateTimeToGround()
+    void OnGUI()
     {
-        float h = transform.position.y;
-        float v = rb.velocity.y;
-        float g = Physics.gravity.y;
+        if (!showDebugInfo || !Application.isPlaying) return;
         
-        // Quadratic formula: h = vt + 0.5gt²
-        float discriminant = v * v - 2 * g * h;
-        if (discriminant < 0) return 0;
+        GUIStyle style = new GUIStyle();
+        style.fontSize = 20;
+        style.normal.textColor = Color.white;
         
-        float t1 = (-v + Mathf.Sqrt(discriminant)) / g;
-        float t2 = (-v - Mathf.Sqrt(discriminant)) / g;
+        GUI.Label(new Rect(10, 10, 300, 30), $"Current Team: {currentTeam}", style);
+        GUI.Label(new Rect(10, 40, 300, 30), $"Hits: {currentTeamHits}/{maxHitsPerTeam}", style);
         
-        return Mathf.Max(t1, t2);
-    }
-    
-    public enum HitType
-    {
-        Bump,   // Manşet pas
-        Set,    // Parmak pas  
-        Spike   // Smaç
+        if (currentTeamHits == maxHitsPerTeam)
+        {
+            style.normal.textColor = Color.red;
+            GUI.Label(new Rect(10, 70, 300, 30), "MUST PASS TO OTHER SIDE!", style);
+        }
     }
 }

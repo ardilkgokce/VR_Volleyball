@@ -126,6 +126,22 @@ public class VRHandController : MonoBehaviour
         float handSpeed = currentVelocity.magnitude;
         if (handSpeed < minHitVelocity) return;
         
+        // Voleybol topu component'ini kontrol et
+        VolleyballBall volleyballBall = collision.gameObject.GetComponent<VolleyballBall>();
+        if (volleyballBall != null)
+        {
+            // VR oyuncunun takımını al
+            VRPlayerProxy vrProxy = GetComponentInParent<VRPlayerProxy>();
+            Team vrTeam = vrProxy != null ? vrProxy.playerTeam : playerTeam;
+            
+            // Vuruş kaydı
+            if (!volleyballBall.OnHit(transform.root, vrTeam))
+            {
+                Debug.LogWarning("VR Player cannot hit the ball! (same player or too many hits)");
+                return;
+            }
+        }
+        
         // Calculate hit direction
         ContactPoint contact = collision.contacts[0];
         Vector3 hitDirection = (contact.point - myTransform.position).normalized;
@@ -149,6 +165,22 @@ public class VRHandController : MonoBehaviour
         // Check if hand is moving fast enough
         float handSpeed = currentVelocity.magnitude;
         if (handSpeed < minHitVelocity) return;
+        
+        // Voleybol topu component'ini kontrol et
+        VolleyballBall volleyballBall = ball.GetComponent<VolleyballBall>();
+        if (volleyballBall != null)
+        {
+            // VR oyuncunun takımını al
+            VRPlayerProxy vrProxy = GetComponentInParent<VRPlayerProxy>();
+            Team vrTeam = vrProxy != null ? vrProxy.playerTeam : playerTeam;
+            
+            // Vuruş kaydı
+            if (!volleyballBall.OnHit(transform.root, vrTeam))
+            {
+                Debug.LogWarning("VR Player cannot hit the ball! (same player or too many hits)");
+                return;
+            }
+        }
         
         // Calculate hit direction based on hand velocity
         Vector3 hitDirection = currentVelocity.normalized;

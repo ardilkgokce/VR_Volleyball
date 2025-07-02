@@ -194,13 +194,37 @@ public class BotController : MonoBehaviour
                             ball = cachedBall;
                             ballRb = cachedBallRb;
                             
-                            // Hareket ediyorsa durdur
-                            if (isMovingToBall)
+                            // Voleybol topu component'ini al
+                            VolleyballBall volleyballBall = ball.GetComponent<VolleyballBall>();
+                            if (volleyballBall != null)
                             {
-                                StopMoving();
+                                // Vuruş kaydı
+                                if (volleyballBall.OnHit(myTransform, team))
+                                {
+                                    // Hareket ediyorsa durdur
+                                    if (isMovingToBall)
+                                    {
+                                        StopMoving();
+                                    }
+                                    
+                                    InstantThrow();
+                                }
+                                else
+                                {
+                                    // Vuruş geçersiz (aynı oyuncu veya fazla vuruş)
+                                    Debug.LogWarning($"{gameObject.name} cannot hit the ball!");
+                                }
+                            }
+                            else
+                            {
+                                // Eski sistem - component yoksa
+                                if (isMovingToBall)
+                                {
+                                    StopMoving();
+                                }
+                                InstantThrow();
                             }
                             
-                            InstantThrow();
                             break;
                         }
                     }
@@ -262,12 +286,39 @@ public class BotController : MonoBehaviour
     {
         validTargets.Clear();
         
+        // Voleybol topu component'ini kontrol et
+        VolleyballBall volleyballBall = null;
+        if (ball != null)
+        {
+            volleyballBall = ball.GetComponent<VolleyballBall>();
+        }
+        
+        // 3. vuruşsa karşı takıma atmak ZORUNDA
+        bool mustPassToOpponent = volleyballBall != null && volleyballBall.MustPassToOpponent();
+        
+        if (mustPassToOpponent)
+        {
+            Debug.Log($"{gameObject.name} MUST pass to opponent team! (3rd hit)");
+        }
+        
         // Cache'lenmiş bot listesini kullan
         for (int i = 0; i < allBots.Length; i++)
         {
             if (allBots[i] != null && allBots[i].transform != myTransform)
             {
-                validTargets.Add(allBots[i].transform);
+                // 3. vuruşsa sadece karşı takım botları hedef olabilir
+                if (mustPassToOpponent)
+                {
+                    if (allBots[i].team != team) // Karşı takım
+                    {
+                        validTargets.Add(allBots[i].transform);
+                    }
+                }
+                else
+                {
+                    // Normal durumda herkes hedef olabilir
+                    validTargets.Add(allBots[i].transform);
+                }
             }
         }
         
@@ -275,19 +326,59 @@ public class BotController : MonoBehaviour
         GameObject vrPlayer = GameObject.FindWithTag("Player");
         if (vrPlayer != null)
         {
-            validTargets.Add(vrPlayer.transform);
+            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null)
+            {
+                // 3. vuruşsa ve VR oyuncu karşı takımdaysa ekle
+                if (mustPassToOpponent)
+                {
+                    if (vrProxy.playerTeam != team)
+                    {
+                        validTargets.Add(vrPlayer.transform);
+                    }
+                }
+                else
+                {
+                    // Normal durumda ekle
+                    validTargets.Add(vrPlayer.transform);
+                }
+            }
         }
         
         if (validTargets.Count > 0)
         {
-            int randomIndex = Random.Range(0, validTargets.Count);
-            Transform selected = validTargets[randomIndex];
-            
-            Debug.Log($"{gameObject.name} hedef seçti: {selected.name}");
-            
-            return selected;
+            // Stratejik seçim: 3. vuruşsa karşı takımın en uzak oyuncusunu hedefle
+            if (mustPassToOpponent && validTargets.Count > 1)
+            {
+                Transform farthestTarget = null;
+                float maxDistance = 0f;
+                
+                foreach (Transform target in validTargets)
+                {
+                    float dist = Vector3.Distance(myTransform.position, target.position);
+                    if (dist > maxDistance)
+                    {
+                        maxDistance = dist;
+                        farthestTarget = target;
+                    }
+                }
+                
+                Debug.Log($"{gameObject.name} targeting farthest opponent: {farthestTarget.name}");
+                return farthestTarget;
+            }
+            else
+            {
+                // Normal rastgele seçim
+                int randomIndex = Random.Range(0, validTargets.Count);
+                Transform selected = validTargets[randomIndex];
+                
+                Debug.Log($"{gameObject.name} hedef seçti: {selected.name}");
+                
+                return selected;
+            }
         }
         
+        Debug.LogError($"{gameObject.name} couldn't find valid target! MustPassToOpponent: {mustPassToOpponent}");
         return null;
     }
     
