@@ -1,6 +1,8 @@
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Collections;
+using Random = UnityEngine.Random;
 
 public enum Team
 {
@@ -146,6 +148,11 @@ public class BotController : MonoBehaviour
             catchCooldown -= Time.deltaTime;
         }
         
+        
+    }
+
+    private void FixedUpdate()
+    {
         // Top yoksa, yakalama izni varsa ve cooldown yoksa topu kontrol et
         if (!hasBall && canCatchBall && catchCooldown <= 0)
         {
@@ -168,7 +175,8 @@ public class BotController : MonoBehaviour
             }
         }
     }
-    
+
+
     void CheckForBall()
     {
         // Debug için kontrol

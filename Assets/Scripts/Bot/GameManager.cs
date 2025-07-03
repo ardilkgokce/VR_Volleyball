@@ -259,35 +259,8 @@ public class GameManager : MonoBehaviour
         }
         
         // Topu oluştur ve başlat
-        if (shouldStartWithVRPlayer && vrProxy != null)
-        {
-            // VR oyuncunun pozisyonunda topu oluştur
-            Vector3 ballPosition = vrProxy.GetTargetTransform().position + Vector3.up * 0.5f;
-            ball = Instantiate(ballPrefab, ballPosition, Quaternion.identity);
-            ball.name = "Ball";
-            ball.tag = "Ball";
-            
-            // Top için Rigidbody ekle
-            Rigidbody ballRb = ball.GetComponent<Rigidbody>();
-            if (ballRb == null)
-            {
-                ballRb = ball.AddComponent<Rigidbody>();
-            }
-            ballRb.mass = 0.5f;
-            ballRb.drag = 0.1f;
-            ballRb.angularDrag = 0.5f;
-            ballRb.useGravity = true; // VR oyuncu için gravity açık
-            
-            // Top için collider ekle
-            if (ball.GetComponent<Collider>() == null)
-            {
-                ball.AddComponent<SphereCollider>();
-            }
-            
-            Debug.Log($"Oyun VR Player ile başlıyor (Takım: {vrProxy.playerTeam})");
-        }
-        else
-        {
+       
+       
             // Rastgele bir bot seç ve başlat
             int startingBot = Random.Range(0, bots.Length);
             
@@ -319,7 +292,6 @@ public class GameManager : MonoBehaviour
             selectedController.StartWithBall(ball);
             
             Debug.Log($"İlk atışı yapacak bot: {bots[startingBot].name} (Takım: {selectedController.team})");
-        }
         
         Debug.Log($"Toplam bot sayısı: {bots.Length}");
         Debug.Log($"VR Player var: {vrPlayer != null}");
