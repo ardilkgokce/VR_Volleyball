@@ -27,6 +27,11 @@ public class BotController : MonoBehaviour
     public bool enableMovement = true;
     public float maxMoveDistance = 20f; // Maksimum hareket mesafesi
     
+    [Header("Default Position")]
+    public Transform defaultPosition; // Inspector'dan atanacak
+    public float returnToDefaultDelay = 2f; // InstantThrow'dan sonra kaç saniye bekleyeceği
+    public bool autoReturnToDefault = true; // Otomatik dönüş aktif mi
+    
     [Header("References")]
     private Transform targetBot;
     private GameObject ball;
@@ -58,6 +63,7 @@ public class BotController : MonoBehaviour
     // Movement
     private Vector3 targetMovePosition;
     private bool isMovingToBall = false;
+    private bool isReturningToDefault = false;
     private static BotController activeCatcher = null; // Hangi bot topu yakalamaya gidiyor
     
     // Ball prediction
@@ -77,6 +83,16 @@ public class BotController : MonoBehaviour
         myTransform = transform;
         botRenderer = GetComponent<Renderer>();
         colorResetDelay = new WaitForSeconds(0.1f);
+        
+        // Default pozisyon atanmamışsa mevcut pozisyonu kaydet
+        if (defaultPosition == null)
+        {
+            GameObject defaultPosObj = new GameObject($"{gameObject.name}_DefaultPosition");
+            defaultPosObj.transform.position = myTransform.position;
+            defaultPosObj.transform.rotation = myTransform.rotation;
+            defaultPosObj.transform.SetParent(transform.parent);
+            defaultPosition = defaultPosObj.transform;
+        }
     }
     
     void Start()
@@ -138,10 +154,17 @@ public class BotController : MonoBehaviour
         // Topu takip et
         TrackBall();
         
-        // Hareket sistemi - sadece aktif yakalayıcı hareket etsin
-        if (enableMovement && isMovingToBall && !hasBall && activeCatcher == this)
+        // Hareket sistemi
+        if (enableMovement)
         {
-            MoveToTarget();
+            if (isReturningToDefault)
+            {
+                ReturnToDefaultPosition();
+            }
+            else if (isMovingToBall && !hasBall && activeCatcher == this)
+            {
+                MoveToTarget();
+            }
         }
     }
     
@@ -335,6 +358,7 @@ public class BotController : MonoBehaviour
                     if (vrProxy.playerTeam != team)
                     {
                         validTargets.Add(vrPlayer.transform);
+                        
                     }
                 }
                 else
@@ -484,6 +508,12 @@ public class BotController : MonoBehaviour
         // Referansları temizle
         ball = null;
         ballRb = null;
+        
+        // Default pozisyona dönmeyi başlat
+        if (autoReturnToDefault)
+        {
+            StartCoroutine(ReturnToDefaultAfterDelay());
+        }
     }
     
     void UpdateBotColor()
@@ -637,6 +667,7 @@ public class BotController : MonoBehaviour
     {
         targetMovePosition = targetPos;
         isMovingToBall = true;
+        isReturningToDefault = false; // Default pozisyona dönmeyi iptal et
         Debug.Log($"{gameObject.name} started moving to position: {targetPos}");
     }
     
@@ -678,6 +709,55 @@ public class BotController : MonoBehaviour
         {
             Quaternion targetRotation = Quaternion.LookRotation(direction);
             myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime * 2f);
+        }
+    }
+    
+    // Default pozisyona dönmeyi başlat (gecikmeyle)
+    IEnumerator ReturnToDefaultAfterDelay()
+    {
+        yield return new WaitForSeconds(returnToDefaultDelay);
+        
+        // Hala top yok ve hareket etmiyorsa default pozisyona dön
+        if (!hasBall && !isMovingToBall)
+        {
+            isReturningToDefault = true;
+            Debug.Log($"{gameObject.name} returning to default position");
+        }
+    }
+    
+    // Default pozisyona dönüş hareketi
+    void ReturnToDefaultPosition()
+    {
+        if (defaultPosition == null)
+        {
+            isReturningToDefault = false;
+            return;
+        }
+        
+        Vector3 direction = defaultPosition.position - myTransform.position;
+        direction.y = 0; // Y eksenini sıfırla
+        
+        float distance = direction.magnitude;
+        
+        // Default pozisyona ulaştıysa dur
+        if (distance < stoppingDistance)
+        {
+            isReturningToDefault = false;
+            // Rotation'ı da default'a döndür
+            myTransform.rotation = Quaternion.Slerp(myTransform.rotation, defaultPosition.rotation, rotationSpeed * Time.deltaTime);
+            Debug.Log($"{gameObject.name} reached default position");
+            return;
+        }
+        
+        // Hareket et
+        Vector3 movement = direction.normalized * moveSpeed * Time.deltaTime;
+        myTransform.position += movement;
+        
+        // Default pozisyona bak
+        if (direction != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
     }
     
@@ -782,12 +862,45 @@ public class BotController : MonoBehaviour
         // Referansları temizle
         ball = null;
         ballRb = null;
+        
+        // Default pozisyona dönmeyi başlat
+        if (autoReturnToDefault)
+        {
+            StartCoroutine(ReturnToDefaultAfterDelay());
+        }
     }
     
     IEnumerator ResetColorAfterDelay()
     {
         yield return colorResetDelay;
         UpdateBotColor();
+    }
+    
+    // Public method - dışarıdan default pozisyona dönmeyi başlatmak için
+    public void ForceReturnToDefault()
+    {
+        if (defaultPosition != null)
+        {
+            isReturningToDefault = true;
+            isMovingToBall = false;
+            Debug.Log($"{gameObject.name} forced to return to default position");
+        }
+    }
+    
+    // Default pozisyonu set etmek için
+    public void SetDefaultPosition(Vector3 position, Quaternion rotation)
+    {
+        if (defaultPosition == null)
+        {
+            GameObject defaultPosObj = new GameObject($"{gameObject.name}_DefaultPosition");
+            defaultPosObj.transform.SetParent(transform.parent);
+            defaultPosition = defaultPosObj.transform;
+        }
+        
+        defaultPosition.position = position;
+        defaultPosition.rotation = rotation;
+        
+        Debug.Log($"{gameObject.name} default position set to: {position}");
     }
     
     // Gizmos ile algılama alanını göster
@@ -809,6 +922,21 @@ public class BotController : MonoBehaviour
             Gizmos.color = Color.magenta;
             Gizmos.DrawLine(transform.position, targetMovePosition);
             Gizmos.DrawWireSphere(targetMovePosition, 0.5f);
+        }
+        
+        // Default pozisyon
+        if (defaultPosition != null)
+        {
+            Gizmos.color = isReturningToDefault ? Color.cyan : new Color(0.5f, 0.5f, 1f, 0.5f);
+            Gizmos.DrawWireSphere(defaultPosition.position, 0.8f);
+            Gizmos.DrawLine(defaultPosition.position, defaultPosition.position + defaultPosition.forward * 1.5f);
+            
+            // Default pozisyona dönüş yolu
+            if (isReturningToDefault)
+            {
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawLine(transform.position, defaultPosition.position);
+            }
         }
     }
     

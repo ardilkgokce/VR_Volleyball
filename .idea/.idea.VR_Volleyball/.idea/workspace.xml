@@ -6,12 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="25d37ef2-e766-4c4a-9859-1e30cc3c94c1" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/.idea.VR_Volleyball/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.VR_Volleyball/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Ball.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/Ball.prefab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/BotPrefab.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/BotPrefab.prefab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scenes/BotTestScene.unity" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scenes/BotTestScene.unity" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Assets/Scripts/Bot/BotController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Bot/BotController.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Scripts/HandTouchDedector.cs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Scripts/HandTouchDedector.cs.meta" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Scripts/VRHandController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/VRHandController.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Scripts/VolleyballBall.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/VolleyballBall.cs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -103,6 +100,7 @@
       <workItem from="1751016313946" duration="660000" />
       <workItem from="1751032560782" duration="8455000" />
       <workItem from="1751459022964" duration="1784000" />
+      <workItem from="1751531309792" duration="4119000" />
     </task>
     <servers />
   </component>

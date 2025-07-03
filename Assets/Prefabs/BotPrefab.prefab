@@ -123,7 +123,16 @@ MonoBehaviour:
   catchRadius: 1.5
   throwForce: 15
   throwHeight: 5
+  moveSpeed: 4
+  runSpeed: 6
+  stoppingDistance: 0.5
+  enableMovement: 1
+  maxMoveDistance: 20
+  defaultPosition: {fileID: 0}
+  returnToDefaultDelay: 0.7
+  autoReturnToDefault: 1
   canCatchBall: 1
+  lastThrower: {fileID: 0}
   normalColor: {r: 0, g: 0, b: 1, a: 1}
   hasBallColor: {r: 0, g: 1, b: 0, a: 1}
   rotationSpeed: 5
