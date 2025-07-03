@@ -58,6 +58,7 @@ public class BotController : MonoBehaviour
     private static List<Transform> validTargets = new List<Transform>();
     private Transform myTransform;
     private static readonly Vector3 catchOffset = Vector3.up * 1.5f;
+    private static readonly Vector3 playerCatchOffset = Vector3.up * 1f;
     private WaitForSeconds colorResetDelay;
     
     // Movement
@@ -471,7 +472,7 @@ public class BotController : MonoBehaviour
         if (isTargetVRPlayer)
         {
             VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            targetPosition = vrProxy.GetTargetTransform().position;
+            targetPosition = vrProxy.GetTargetTransform().position + playerCatchOffset;
         }
         else
         {
@@ -801,7 +802,7 @@ public class BotController : MonoBehaviour
         if (isTargetVRPlayer)
         {
             VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            targetPosition = vrProxy.GetTargetTransform().position;
+            targetPosition = vrProxy.GetTargetTransform().position + playerCatchOffset;
         }
         else
         {
