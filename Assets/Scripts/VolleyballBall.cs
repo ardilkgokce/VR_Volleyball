@@ -79,7 +79,7 @@ public class VolleyballBall : MonoBehaviour
         }
         
         // UI TextMeshPro'yu GameObject adına göre bul
-        GameObject dropZoneObject = GameObject.Find(dropZoneTextObjectName);
+        GameObject dropZoneObject = GameObject.Find("DropZoneText");
         if (dropZoneObject != null)
         {
             dropZoneText = dropZoneObject.GetComponent<TextMeshProUGUI>();
