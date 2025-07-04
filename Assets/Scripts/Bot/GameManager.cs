@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit;
+using TMPro; // UI için
+using System.Collections; // IEnumerator için
 
 public class GameManager : MonoBehaviour
 {
@@ -18,19 +20,64 @@ public class GameManager : MonoBehaviour
     public Transform vrPlayerPosition;
     public GameObject vrPlayerPrefab;
     
+    [Header("Score System")]
+    [SerializeField] private int redTeamScore = 0;
+    [SerializeField] private int blueTeamScore = 0;
+    public int winningScore = 21; // Voleybol set kazanma skoru
+    public int minimumDifference = 2; // Minimum fark
+    
+    [Header("Score UI")]
+    public string scoreTextObjectName = "ScoreText";
+    public string gameStatusTextObjectName = "GameStatusText";
+    private TextMeshProUGUI scoreText;
+    private TextMeshProUGUI gameStatusText;
+    
+    [Header("Game State")]
+    public bool isGameActive = true;
+    private bool isRallyActive = true; // Rally kontrolü için yeni değişken
+    private Team servingTeam = Team.Blue; // Servis atan takım
+    
     [Header("XRI Input Actions")]
-    [SerializeField] private InputActionAsset xriInputActions; // XRI Default Input Actions
+    [SerializeField] private InputActionAsset xriInputActions;
     private InputAction restartAction;
+    
+    // Event sistemi
+    public delegate void ScoreChangedEvent(Team team, int redScore, int blueScore);
+    public static event ScoreChangedEvent OnScoreChanged;
+    
+    public delegate void GameEndedEvent(Team winnerTeam, int redScore, int blueScore);
+    public static event GameEndedEvent OnGameEnded;
     
     private GameObject[] bots;
     private GameObject ball;
     
+    // Singleton pattern
+    private static GameManager instance;
+    public static GameManager Instance
+    {
+        get
+        {
+            if (instance == null)
+            {
+                instance = FindObjectOfType<GameManager>();
+            }
+            return instance;
+        }
+    }
+    
+    void Awake()
+    {
+        instance = this;
+    }
+    
     void Start()
     {
+        // UI elementlerini bul
+        FindUIElements();
+        
         // XRI Input Actions'ı otomatik bul
         if (xriInputActions == null)
         {
-            // XR Interaction Manager'dan al
             var xrManager = FindObjectOfType<XRInteractionManager>();
             if (xrManager != null)
             {
@@ -49,18 +96,276 @@ public class GameManager : MonoBehaviour
         
         SetupInputActions();
         SetupGame();
+        
+        // Başlangıç skorunu göster
+        UpdateScoreUI();
+    }
+    
+    void FindUIElements()
+    {
+        // Score Text'i bul
+        GameObject scoreObject = GameObject.Find(scoreTextObjectName);
+        if (scoreObject != null)
+        {
+            scoreText = scoreObject.GetComponent<TextMeshProUGUI>();
+            if (scoreText == null)
+            {
+                Debug.LogError($"GameObject '{scoreTextObjectName}' found but doesn't have TextMeshProUGUI component!");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"Cannot find GameObject named '{scoreTextObjectName}' in the scene!");
+        }
+        
+        // Game Status Text'i bul
+        GameObject statusObject = GameObject.Find(gameStatusTextObjectName);
+        if (statusObject != null)
+        {
+            gameStatusText = statusObject.GetComponent<TextMeshProUGUI>();
+            if (gameStatusText != null)
+            {
+                gameStatusText.gameObject.SetActive(false); // Başlangıçta gizle
+            }
+        }
+    }
+    
+    // Skor ekleme metodu - VolleyballBall'dan çağrılacak
+    public void AddScore(Team scoringTeam, string reason = "")
+    {
+        // Oyun veya rally aktif değilse skor ekleme
+        if (!isGameActive || !isRallyActive) 
+        {
+            Debug.Log($"Score ignored - Game Active: {isGameActive}, Rally Active: {isRallyActive}");
+            return;
+        }
+        
+        // Rally'yi hemen durdur (birden fazla skor eklenmesini önle)
+        isRallyActive = false;
+        Debug.Log("Rally ended - scoring disabled until new rally");
+        
+        // Skoru artır
+        if (scoringTeam == Team.Red)
+        {
+            redTeamScore++;
+            Debug.Log($"Red team scores! Reason: {reason}. Score: {redTeamScore}-{blueTeamScore}");
+        }
+        else
+        {
+            blueTeamScore++;
+            Debug.Log($"Blue team scores! Reason: {reason}. Score: {redTeamScore}-{blueTeamScore}");
+        }
+        
+        // Servis hakkı skor alan takıma geçer
+        servingTeam = scoringTeam;
+        
+        // UI'ı güncelle
+        UpdateScoreUI();
+        
+        // Event'i tetikle
+        OnScoreChanged?.Invoke(scoringTeam, redTeamScore, blueTeamScore);
+        
+        // Oyun bitişini kontrol et
+        CheckGameEnd();
+        
+        // Rally'yi yeniden başlat
+        if (isGameActive)
+        {
+            StartCoroutine(StartNewRally(scoringTeam));
+        }
+    }
+    
+    void UpdateScoreUI()
+    {
+        if (scoreText != null)
+        {
+            string redColor = "#FF4444";
+            string blueColor = "#0080FF";
+            
+            scoreText.text = $"<color={redColor}>RED: {redTeamScore}</color> - <color={blueColor}>BLUE: {blueTeamScore}</color>\n" +
+                            $"<size=80%>Servis: {(servingTeam == Team.Red ? "RED" : "BLUE")}</size>";
+        }
+    }
+    
+    void CheckGameEnd()
+    {
+        bool redWins = false;
+        bool blueWins = false;
+        
+        // Kazanma koşulları
+        if (redTeamScore >= winningScore && (redTeamScore - blueTeamScore) >= minimumDifference)
+        {
+            redWins = true;
+        }
+        else if (blueTeamScore >= winningScore && (blueTeamScore - redTeamScore) >= minimumDifference)
+        {
+            blueWins = true;
+        }
+        
+        if (redWins || blueWins)
+        {
+            isGameActive = false;
+            Team winner = redWins ? Team.Red : Team.Blue;
+            
+            // Oyun sonu UI'ı göster
+            ShowGameEndUI(winner);
+            
+            // Event'i tetikle
+            OnGameEnded?.Invoke(winner, redTeamScore, blueTeamScore);
+            
+            Debug.Log($"GAME OVER! {winner} team wins! Final score: RED {redTeamScore} - BLUE {blueTeamScore}");
+        }
+    }
+    
+    void ShowGameEndUI(Team winner)
+    {
+        if (gameStatusText != null)
+        {
+            gameStatusText.gameObject.SetActive(true);
+            
+            string winnerColor = winner == Team.Red ? "#FF4444" : "#0080FF";
+            string winnerName = winner.ToString().ToUpper();
+            
+            gameStatusText.text = $"<size=150%><b>OYUN BİTTİ!</b></size>\n" +
+                                 $"<size=120%><color={winnerColor}>{winnerName} KAZANDI!</color></size>\n" +
+                                 $"<size=100%>Skor: {redTeamScore} - {blueTeamScore}</size>\n" +
+                                 $"<size=80%>Yeniden başlatmak için R tuşuna basın</size>";
+        }
+    }
+    
+    IEnumerator StartNewRally(Team servingTeam)
+    {
+        // Rally başlamadan önce biraz bekle
+        yield return new WaitForSeconds(2f);
+        
+        // Eski topu yok et
+        if (ball != null)
+        {
+            Destroy(ball);
+        }
+        
+        // Yeni rally için rally durumunu aktif et
+        isRallyActive = true;
+        Debug.Log("New rally starting - scoring enabled");
+        
+        // Servis atacak botu belirle (VR oyuncu servis atamaz)
+        Transform server = GetServerForTeam(servingTeam);
+        
+        if (server != null)
+        {
+            // Yeni topu oluştur
+            Vector3 ballPosition = server.position + Vector3.up * 1.5f;
+            ball = Instantiate(ballPrefab, ballPosition, Quaternion.identity);
+            ball.name = "Ball";
+            ball.tag = "Ball";
+            
+            // Rigidbody ayarları
+            Rigidbody ballRb = ball.GetComponent<Rigidbody>();
+            if (ballRb == null)
+            {
+                ballRb = ball.AddComponent<Rigidbody>();
+            }
+            ballRb.mass = 0.5f;
+            ballRb.drag = 0.1f;
+            ballRb.angularDrag = 0.5f;
+            ballRb.useGravity = false;
+            
+            // Collider
+            if (ball.GetComponent<Collider>() == null)
+            {
+                ball.AddComponent<SphereCollider>();
+            }
+            
+            // Bot'a topu ver ve servis attığını belirt
+            BotController botController = server.GetComponent<BotController>();
+            if (botController != null)
+            {
+                // StartWithBall metoduna isServing parametresi eklenecek
+                botController.StartWithBall(ball, true); // true = servis atıyor
+                Debug.Log($"{server.name} is serving for {servingTeam} team to opponent!");
+            }
+        }
+        else
+        {
+            Debug.LogError($"No bot found to serve for {servingTeam} team!");
+            // Rally'yi tekrar aktif et
+            isRallyActive = true;
+        }
+    }
+    
+    Transform GetServerForTeam(Team team)
+    {
+        List<Transform> teamMembers = new List<Transform>();
+        
+        // Sadece botları ekle (VR oyuncu servis atamaz)
+        foreach (GameObject bot in bots)
+        {
+            if (bot != null)
+            {
+                BotController bc = bot.GetComponent<BotController>();
+                if (bc != null && bc.team == team)
+                {
+                    teamMembers.Add(bot.transform);
+                }
+            }
+        }
+        
+        // VR oyuncu servis atamaz, bu yüzden onu ekleMİyoruz
+        
+        // Rastgele bir bot seç
+        if (teamMembers.Count > 0)
+        {
+            return teamMembers[Random.Range(0, teamMembers.Count)];
+        }
+        
+        // Eğer bu takımda bot yoksa (sadece VR oyuncu varsa), karşı takımdan bir bot seç
+        Debug.LogWarning($"No bots found in {team} team for serving. Selecting from opposite team.");
+        
+        Team oppositeTeam = team == Team.Red ? Team.Blue : Team.Red;
+        foreach (GameObject bot in bots)
+        {
+            if (bot != null)
+            {
+                BotController bc = bot.GetComponent<BotController>();
+                if (bc != null && bc.team == oppositeTeam)
+                {
+                    teamMembers.Add(bot.transform);
+                }
+            }
+        }
+        
+        if (teamMembers.Count > 0)
+        {
+            return teamMembers[Random.Range(0, teamMembers.Count)];
+        }
+        
+        return null;
+    }
+    
+    // Skoru sıfırla
+    public void ResetScore()
+    {
+        redTeamScore = 0;
+        blueTeamScore = 0;
+        servingTeam = Team.Blue;
+        isGameActive = true;
+        isRallyActive = true; // Rally'yi de aktif et
+        
+        UpdateScoreUI();
+        
+        if (gameStatusText != null)
+        {
+            gameStatusText.gameObject.SetActive(false);
+        }
     }
     
     void SetupInputActions()
     {
         if (xriInputActions != null)
         {
-            // Mevcut bir action'ı kullan veya yeni bir action ekle
-            // Option 1: Activate action'ını kullan (genelde trigger için)
             var rightHandInteraction = xriInputActions.FindActionMap("XRI RightHand Interaction");
             if (rightHandInteraction != null)
             {
-                // A Butonu için Select action'ını kullanabiliriz
                 restartAction = rightHandInteraction.FindAction("Select");
                 if (restartAction != null)
                 {
@@ -69,7 +374,6 @@ public class GameManager : MonoBehaviour
                     Debug.Log("Using XRI RightHand Select action for restart");
                 }
                 
-                // Alternatif: Activate action'ı
                 var activateAction = rightHandInteraction.FindAction("Activate");
                 if (activateAction != null && restartAction == null)
                 {
@@ -80,7 +384,6 @@ public class GameManager : MonoBehaviour
                 }
             }
             
-            // Option 2: UI action'larını kullan
             var uiActionMap = xriInputActions.FindActionMap("XRI UI");
             if (uiActionMap != null && restartAction == null)
             {
@@ -111,7 +414,6 @@ public class GameManager : MonoBehaviour
     
     void OnRestartButtonPressed(InputAction.CallbackContext context)
     {
-        // Sadece button press'te çalış (hold'da değil)
         if (context.phase == InputActionPhase.Performed)
         {
             Debug.Log($"Restart button pressed via: {context.action.name}");
@@ -128,10 +430,10 @@ public class GameManager : MonoBehaviour
         }
         
         // Alternatif: Legacy input fallback
-        if (Input.GetKeyDown(KeyCode.JoystickButton0) || // A
-            Input.GetKeyDown(KeyCode.JoystickButton1) || // B
-            Input.GetKeyDown(KeyCode.JoystickButton2) || // X
-            Input.GetKeyDown(KeyCode.JoystickButton3))   // Y
+        if (Input.GetKeyDown(KeyCode.JoystickButton0) || 
+            Input.GetKeyDown(KeyCode.JoystickButton1) || 
+            Input.GetKeyDown(KeyCode.JoystickButton2) || 
+            Input.GetKeyDown(KeyCode.JoystickButton3))
         {
             Debug.Log("Controller button pressed via legacy input");
             RestartScene();
@@ -140,6 +442,9 @@ public class GameManager : MonoBehaviour
     
     void SetupGame()
     {
+        // Skoru sıfırla
+        ResetScore();
+        
         // VR oyuncu var mı kontrol et
         GameObject vrPlayer = GameObject.FindWithTag("Player");
         bool hasVRPlayer = vrPlayer != null;
@@ -219,7 +524,7 @@ public class GameManager : MonoBehaviour
         StartCoroutine(StartGameAfterPositioning());
     }
     
-    System.Collections.IEnumerator StartGameAfterPositioning()
+    IEnumerator StartGameAfterPositioning()
     {
         // Bir frame bekle - botların pozisyonlarına yerleşmesi için
         yield return null;
@@ -232,14 +537,11 @@ public class GameManager : MonoBehaviour
         
         // VR oyuncu var mı kontrol et
         GameObject vrPlayer = GameObject.FindWithTag("Player");
-        bool shouldStartWithVRPlayer = false;
         VRPlayerProxy vrProxy = null;
         
         if (vrPlayer != null)
         {
             vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
-            // %50 şansla VR oyuncu veya bot başlasın
-            shouldStartWithVRPlayer = Random.Range(0f, 1f) > 0.5f;
         }
         
         // TÜM botların yakalama iznini aç (başlangıçta)
@@ -248,7 +550,7 @@ public class GameManager : MonoBehaviour
             if (bots[i] != null)
             {
                 BotController controller = bots[i].GetComponent<BotController>();
-                controller.canCatchBall = true; // Hepsine izin ver
+                controller.canCatchBall = true;
             }
         }
         
@@ -258,50 +560,11 @@ public class GameManager : MonoBehaviour
             vrProxy.canCatchBall = true;
         }
         
-        // Topu oluştur ve başlat
-       
-       
-            // Rastgele bir bot seç ve başlat
-            int startingBot = Random.Range(0, bots.Length);
-            
-            // Topu seçilen botun GÜNCEL pozisyonunda oluştur
-            Vector3 ballPosition = bots[startingBot].transform.position + Vector3.up * 1.5f;
-            ball = Instantiate(ballPrefab, ballPosition, Quaternion.identity);
-            ball.name = "Ball";
-            ball.tag = "Ball";
-            
-            // Top için Rigidbody ekle
-            Rigidbody ballRb = ball.GetComponent<Rigidbody>();
-            if (ballRb == null)
-            {
-                ballRb = ball.AddComponent<Rigidbody>();
-            }
-            ballRb.mass = 0.5f;
-            ballRb.drag = 0.1f;
-            ballRb.angularDrag = 0.5f;
-            ballRb.useGravity = false;
-            
-            // Top için collider ekle
-            if (ball.GetComponent<Collider>() == null)
-            {
-                ball.AddComponent<SphereCollider>();
-            }
-            
-            // Seçilen bota topu ver
-            BotController selectedController = bots[startingBot].GetComponent<BotController>();
-            selectedController.StartWithBall(ball);
-            
-            Debug.Log($"İlk atışı yapacak bot: {bots[startingBot].name} (Takım: {selectedController.team})");
+        // Rally durumunu aktif et
+        isRallyActive = true;
         
-        Debug.Log($"Toplam bot sayısı: {bots.Length}");
-        Debug.Log($"VR Player var: {vrPlayer != null}");
-        
-        // Tüm botların durumunu debug et
-        foreach (GameObject bot in bots)
-        {
-            BotController bc = bot.GetComponent<BotController>();
-            Debug.Log($"{bot.name} - CanCatch: {bc.canCatchBall}");
-        }
+        // İlk servisi başlat
+        StartCoroutine(StartNewRally(servingTeam));
     }
     
     void RestartGame()
@@ -329,48 +592,17 @@ public class GameManager : MonoBehaviour
         SceneManager.LoadScene(currentScene.name);
     }
     
-    void OnDrawGizmos()
+    // Rally durumunu kontrol eden public metod
+    public bool IsRallyActive()
     {
-        // Blue takım pozisyonlarını göster
-        if (blueTeamPositions != null)
-        {
-            Gizmos.color = new Color(0.2f, 0.5f, 1f, 0.5f);
-            foreach (Transform pos in blueTeamPositions)
-            {
-                if (pos != null)
-                {
-                    Gizmos.DrawWireSphere(pos.position, 0.5f);
-                    Gizmos.DrawLine(pos.position, pos.position + Vector3.up * 2f);
-                }
-            }
-        }
-        
-        // Red takım pozisyonlarını göster
-        if (redTeamPositions != null)
-        {
-            Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.5f);
-            foreach (Transform pos in redTeamPositions)
-            {
-                if (pos != null)
-                {
-                    Gizmos.DrawWireSphere(pos.position, 0.5f);
-                    Gizmos.DrawLine(pos.position, pos.position + Vector3.up * 2f);
-                }
-            }
-        }
-        
-        // VR Player pozisyonunu göster
-        if (vrPlayerPosition != null)
-        {
-            Gizmos.color = Color.green;
-            Gizmos.DrawWireSphere(vrPlayerPosition.position, 0.6f);
-            Gizmos.DrawLine(vrPlayerPosition.position, vrPlayerPosition.position + Vector3.up * 2.5f);
-            
-            // Hangi takım tarafında olduğunu göster
-            Gizmos.color = vrPlayerPosition.position.x > 0 ? 
-                new Color(0.2f, 0.5f, 1f, 0.8f) : 
-                new Color(1f, 0.3f, 0.3f, 0.8f);
-            Gizmos.DrawCube(vrPlayerPosition.position + Vector3.up * 3f, Vector3.one * 0.3f);
-        }
+        return isRallyActive;
     }
+    
+    // Rally'yi manuel olarak bitiren metod (debug için)
+    public void EndRally()
+    {
+        isRallyActive = false;
+        Debug.Log("Rally manually ended");
+    }
+    
 }

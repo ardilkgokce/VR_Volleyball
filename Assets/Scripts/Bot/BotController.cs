@@ -1085,28 +1085,198 @@ public class BotController : MonoBehaviour
     }
     
     // GameManager'dan çağrılacak - başlangıçta topu ver
-    public void StartWithBall(GameObject startBall)
+    public void StartWithBall(GameObject startBall, bool isServing = false)
     {
         ball = startBall;
         ballRb = ball.GetComponent<Rigidbody>();
         hasBall = true;
         canCatchBall = true;
-        
+    
         // Global cache'i güncelle
         cachedBall = ball;
         cachedBallTransform = ball.transform;
         cachedBallRb = ballRb;
-        
+    
         // Topu bota yapıştır
         ball.transform.position = myTransform.position + catchOffset;
         ball.transform.SetParent(myTransform);
-        
+    
         UpdateBotColor();
-        
+    
         if (showTrajectory)
-            Debug.Log($"{gameObject.name} topu aldı ve hemen atıyor...");
-        
-        // Hemen fırlat
+            Debug.Log($"{gameObject.name} topu aldı ve {(isServing ? "servis atacak" : "hemen atıyor")}...");
+    
+        // Servis ise karşı takıma at
+        if (isServing)
+        {
+            ThrowServiceToOpponent();
+        }
+        else
+        {
+            // Normal atış
+            ThrowBallToTarget();
+        }
+    }
+    void ThrowServiceToOpponent()
+{
+    // Karşı takımdan hedef seç
+    targetBot = GetOpponentTarget();
+    
+    if (targetBot == null || ball == null)
+    {
+        Debug.LogError("Service target or ball is null!");
+        // Eğer karşı takımda kimse yoksa normal atış yap
         ThrowBallToTarget();
+        return;
+    }
+    
+    // VR Player mı yoksa Bot mu kontrol et
+    bool isTargetVRPlayer = targetBot.CompareTag("Player");
+    
+    if (isTargetVRPlayer)
+    {
+        VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+        if (showTrajectory)
+            Debug.Log($"{gameObject.name} ({team}) servis atıyor → VR Player ({vrProxy.playerTeam})!");
+    }
+    else
+    {
+        BotController targetController = targetBot.GetComponent<BotController>();
+        if (showTrajectory)
+            Debug.Log($"{gameObject.name} ({team}) servis atıyor → {targetBot.name} ({targetController.team})!");
+    }
+    
+    // Geri kalan kod ThrowBallToTarget ile aynı...
+    hasBall = false;
+    catchCooldown = 0.5f;
+    canCatchBall = false;
+    
+    // TÜM botların yakalama iznini kapat
+    for (int i = 0; i < allBots.Length; i++)
+    {
+        allBots[i].canCatchBall = false;
+        allBots[i].lastThrower = myTransform;
+    }
+    
+    // Hedef'e yakalama izni ver
+    if (isTargetVRPlayer)
+    {
+        VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+        vrProxy.EnableCatching();
+    }
+    else
+    {
+        BotController targetController = targetBot.GetComponent<BotController>();
+        targetController.EnableCatching();
+    }
+    
+    // Topu serbest bırak ve fırlat
+    ball.transform.SetParent(null);
+    ballRb.useGravity = true;
+    
+    // Hedef pozisyonu
+    Vector3 targetPosition;
+    if (isTargetVRPlayer)
+    {
+        VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+        targetPosition = vrProxy.GetTargetTransform().position + playerCatchOffset;
+    }
+    else
+    {
+        targetPosition = targetBot.position + catchOffset;
+    }
+    
+    Vector3 direction = targetPosition - ball.transform.position;
+    float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
+    
+    // Parabolik atış hesaplaması
+    float gravity = Mathf.Abs(Physics.gravity.y);
+    float heightDifference = targetPosition.y - ball.transform.position.y;
+    float dragCompensation = 1f + (ballRb.drag * 0.2f * horizontalDistance / 10f);
+    float angle = 45f * Mathf.Deg2Rad;
+    
+    float v0 = Mathf.Sqrt((gravity * horizontalDistance * horizontalDistance) / 
+                         (2 * Mathf.Cos(angle) * Mathf.Cos(angle) * 
+                         (horizontalDistance * Mathf.Tan(angle) - heightDifference)));
+    
+    v0 *= dragCompensation;
+    
+    // Hız vektörünü oluştur
+    Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
+    finalVelocity.y = v0 * Mathf.Sin(angle);
+    
+    // Topu fırlat
+    ballRb.velocity = finalVelocity;
+    
+    // Düşüş noktasını hesapla
+    CalculateLandingPoint(ball.transform.position, finalVelocity);
+    
+    UpdateBotColor();
+    
+    // Referansları temizle
+    ball = null;
+    ballRb = null;
+    
+    // Default pozisyona dönmeyi başlat
+    if (autoReturnToDefault)
+    {
+        StartCoroutine(ReturnToDefaultAfterDelay());
+    }
+}
+    Transform GetOpponentTarget()
+    {
+        validTargets.Clear();
+    
+        // Karşı takım hangisi?
+        Team opponentTeam = team == Team.Red ? Team.Blue : Team.Red;
+    
+        // Karşı takım botlarını ekle
+        for (int i = 0; i < allBots.Length; i++)
+        {
+            if (allBots[i] != null && allBots[i].team == opponentTeam)
+            {
+                validTargets.Add(allBots[i].transform);
+            }
+        }
+    
+        // VR oyuncu karşı takımdaysa onu da ekle
+        GameObject vrPlayer = GameObject.FindWithTag("Player");
+        if (vrPlayer != null)
+        {
+            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null && vrProxy.playerTeam == opponentTeam)
+            {
+                validTargets.Add(vrPlayer.transform);
+            }
+        }
+    
+        if (validTargets.Count > 0)
+        {
+            // Servis için stratejik seçim: Sahanın ortasına yakın birini seç
+            Transform centerTarget = null;
+            float minDistanceToCenter = float.MaxValue;
+        
+            foreach (Transform target in validTargets)
+            {
+                float distToCenter = Mathf.Abs(target.position.z); // Z=0 sahanın ortası
+                if (distToCenter < minDistanceToCenter)
+                {
+                    minDistanceToCenter = distToCenter;
+                    centerTarget = target;
+                }
+            }
+        
+            if (centerTarget != null)
+            {
+                Debug.Log($"{gameObject.name} servisi {centerTarget.name}'e atıyor (orta saha oyuncusu)");
+                return centerTarget;
+            }
+        
+            // Eğer bulamazsa rastgele seç
+            return validTargets[Random.Range(0, validTargets.Count)];
+        }
+    
+        Debug.LogError($"{gameObject.name} couldn't find opponent target for service!");
+        return null;
     }
 }
