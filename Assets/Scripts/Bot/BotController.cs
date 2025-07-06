@@ -866,14 +866,6 @@ static void FindAndActivateClosestBot()
                 return false;
             }
         }
-        else if (team == Team.Blue)
-        {
-            if (targetPosition.x < netBoundary)
-            {
-                Debug.LogWarning($"Blue team bot {gameObject.name} cannot cross net boundary! Target X: {targetPosition.x:F2}");
-                return false;
-            }
-        }
     
         // Saha dışı kontrolü - SADECE RED TAKIM İÇİN
         if (team == Team.Red && courtManager != null)
