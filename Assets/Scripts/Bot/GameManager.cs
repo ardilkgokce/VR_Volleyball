@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit;
-using TMPro; // UI için
-using System.Collections; // IEnumerator için
+using TMPro;
+using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
@@ -23,19 +23,31 @@ public class GameManager : MonoBehaviour
     [Header("Score System")]
     [SerializeField] private int redTeamScore = 0;
     [SerializeField] private int blueTeamScore = 0;
-    public int winningScore = 21; // Voleybol set kazanma skoru
-    public int minimumDifference = 2; // Minimum fark
+    public int winningScore = 21; // Normal set için 21 puan
+    public int finalSetWinningScore = 15; // 5. set için 15 puan
+    public int minimumDifference = 2;
+    
+    [Header("Set System")]
+    [SerializeField] private int redTeamSets = 0;
+    [SerializeField] private int blueTeamSets = 0;
+    [SerializeField] private int currentSet = 1;
+    public int totalSets = 5; // Best of 5
+    public int setsToWin = 3; // 3 set kazanmak gerekiyor
     
     [Header("Score UI")]
     public string scoreTextObjectName = "ScoreText";
     public string gameStatusTextObjectName = "GameStatusText";
+    public string setScoreTextObjectName = "SetScoreText"; // Set skoru için yeni UI
     private TextMeshProUGUI scoreText;
     private TextMeshProUGUI gameStatusText;
+    private TextMeshProUGUI setScoreText;
     
     [Header("Game State")]
     public bool isGameActive = true;
-    private bool isRallyActive = true; // Rally kontrolü için yeni değişken
-    private Team servingTeam = Team.Blue; // Servis atan takım
+    private bool isRallyActive = true;
+    private bool isMatchActive = true; // Maç devam ediyor mu
+    private Team servingTeam = Team.Blue;
+    private Team lastSetWinner = Team.Blue; // Son seti kazanan takım
     
     [Header("XRI Input Actions")]
     [SerializeField] private InputActionAsset xriInputActions;
@@ -45,8 +57,11 @@ public class GameManager : MonoBehaviour
     public delegate void ScoreChangedEvent(Team team, int redScore, int blueScore);
     public static event ScoreChangedEvent OnScoreChanged;
     
-    public delegate void GameEndedEvent(Team winnerTeam, int redScore, int blueScore);
-    public static event GameEndedEvent OnGameEnded;
+    public delegate void SetEndedEvent(Team winnerTeam, int setNumber);
+    public static event SetEndedEvent OnSetEnded;
+    
+    public delegate void MatchEndedEvent(Team winnerTeam, int redSets, int blueSets);
+    public static event MatchEndedEvent OnMatchEnded;
     
     private GameObject[] bots;
     private GameObject ball;
@@ -72,10 +87,8 @@ public class GameManager : MonoBehaviour
     
     void Start()
     {
-        // UI elementlerini bul
         FindUIElements();
         
-        // XRI Input Actions'ı otomatik bul
         if (xriInputActions == null)
         {
             var xrManager = FindObjectOfType<XRInteractionManager>();
@@ -97,13 +110,12 @@ public class GameManager : MonoBehaviour
         SetupInputActions();
         SetupGame();
         
-        // Başlangıç skorunu göster
         UpdateScoreUI();
+        UpdateSetScoreUI();
     }
     
     void FindUIElements()
     {
-        // Score Text'i bul
         GameObject scoreObject = GameObject.Find(scoreTextObjectName);
         if (scoreObject != null)
         {
@@ -118,33 +130,39 @@ public class GameManager : MonoBehaviour
             Debug.LogWarning($"Cannot find GameObject named '{scoreTextObjectName}' in the scene!");
         }
         
-        // Game Status Text'i bul
         GameObject statusObject = GameObject.Find(gameStatusTextObjectName);
         if (statusObject != null)
         {
             gameStatusText = statusObject.GetComponent<TextMeshProUGUI>();
             if (gameStatusText != null)
             {
-                gameStatusText.gameObject.SetActive(false); // Başlangıçta gizle
+                gameStatusText.gameObject.SetActive(false);
             }
+        }
+        
+        // Set skoru UI'ını bul
+        GameObject setScoreObject = GameObject.Find(setScoreTextObjectName);
+        if (setScoreObject != null)
+        {
+            setScoreText = setScoreObject.GetComponent<TextMeshProUGUI>();
+        }
+        else
+        {
+            Debug.LogWarning($"Cannot find GameObject named '{setScoreTextObjectName}' in the scene!");
         }
     }
     
-    // Skor ekleme metodu - VolleyballBall'dan çağrılacak
     public void AddScore(Team scoringTeam, string reason = "")
     {
-        // Oyun veya rally aktif değilse skor ekleme
-        if (!isGameActive || !isRallyActive) 
+        if (!isGameActive || !isRallyActive || !isMatchActive) 
         {
-            Debug.Log($"Score ignored - Game Active: {isGameActive}, Rally Active: {isRallyActive}");
+            Debug.Log($"Score ignored - Game Active: {isGameActive}, Rally Active: {isRallyActive}, Match Active: {isMatchActive}");
             return;
         }
         
-        // Rally'yi hemen durdur (birden fazla skor eklenmesini önle)
         isRallyActive = false;
         Debug.Log("Rally ended - scoring disabled until new rally");
         
-        // Skoru artır
         if (scoringTeam == Team.Red)
         {
             redTeamScore++;
@@ -156,20 +174,15 @@ public class GameManager : MonoBehaviour
             Debug.Log($"Blue team scores! Reason: {reason}. Score: {redTeamScore}-{blueTeamScore}");
         }
         
-        // Servis hakkı skor alan takıma geçer
         servingTeam = scoringTeam;
         
-        // UI'ı güncelle
         UpdateScoreUI();
         
-        // Event'i tetikle
         OnScoreChanged?.Invoke(scoringTeam, redTeamScore, blueTeamScore);
         
-        // Oyun bitişini kontrol et
-        CheckGameEnd();
+        CheckSetEnd();
         
-        // Rally'yi yeniden başlat
-        if (isGameActive)
+        if (isGameActive && isMatchActive)
         {
             StartCoroutine(StartNewRally(scoringTeam));
         }
@@ -182,42 +195,130 @@ public class GameManager : MonoBehaviour
             string redColor = "#FF4444";
             string blueColor = "#0080FF";
             
-            scoreText.text = $"<color={redColor}>RED: {redTeamScore}</color> - <color={blueColor}>BLUE: {blueTeamScore}</color>\n" +
-                            $"<size=80%>Servis: {(servingTeam == Team.Red ? "RED" : "BLUE")}</size>";
+            // 5. set mi kontrol et
+            int targetScore = (currentSet == 5) ? finalSetWinningScore : winningScore;
+            
+            scoreText.text = $"<size=120%><color={redColor}>RED: {redTeamScore}</color> - <color={blueColor}>BLUE: {blueTeamScore}</color></size>\n" +
+                            $"<size=80%>Set {currentSet} - İlk {targetScore} (Min +{minimumDifference})</size>\n" +
+                            $"<size=70%>Servis: {(servingTeam == Team.Red ? "KIRMIZI" : "MAVİ")}</size>";
         }
     }
     
-    void CheckGameEnd()
+    void UpdateSetScoreUI()
     {
-        bool redWins = false;
-        bool blueWins = false;
-        
-        // Kazanma koşulları
-        if (redTeamScore >= winningScore && (redTeamScore - blueTeamScore) >= minimumDifference)
+        if (setScoreText != null)
         {
-            redWins = true;
+            string redColor = "#FF4444";
+            string blueColor = "#0080FF";
+            
+            setScoreText.text = $"<size=150%><b>SET SKORU</b></size>\n" +
+                               $"<size=120%><color={redColor}>RED: {redTeamSets}</color> - <color={blueColor}>BLUE: {blueTeamSets}</color></size>\n" +
+                               $"<size=80%>İlk {setsToWin} set kazanan</size>";
         }
-        else if (blueTeamScore >= winningScore && (blueTeamScore - redTeamScore) >= minimumDifference)
+    }
+    
+    void CheckSetEnd()
+    {
+        bool setEnded = false;
+        Team setWinner = Team.Blue;
+        
+        // 5. set mi kontrol et
+        int targetScore = (currentSet == 5) ? finalSetWinningScore : winningScore;
+        
+        // Set kazanma koşulları
+        if (redTeamScore >= targetScore && (redTeamScore - blueTeamScore) >= minimumDifference)
         {
-            blueWins = true;
+            setEnded = true;
+            setWinner = Team.Red;
+            redTeamSets++;
+        }
+        else if (blueTeamScore >= targetScore && (blueTeamScore - redTeamScore) >= minimumDifference)
+        {
+            setEnded = true;
+            setWinner = Team.Blue;
+            blueTeamSets++;
         }
         
-        if (redWins || blueWins)
+        if (setEnded)
         {
             isGameActive = false;
-            Team winner = redWins ? Team.Red : Team.Blue;
+            lastSetWinner = setWinner;
             
-            // Oyun sonu UI'ı göster
-            ShowGameEndUI(winner);
+            Debug.Log($"SET {currentSet} ENDED! {setWinner} team wins! Set score: RED {redTeamScore} - BLUE {blueTeamScore}");
+            Debug.Log($"Total Sets - RED: {redTeamSets}, BLUE: {blueTeamSets}");
             
-            // Event'i tetikle
-            OnGameEnded?.Invoke(winner, redTeamScore, blueTeamScore);
+            OnSetEnded?.Invoke(setWinner, currentSet);
             
-            Debug.Log($"GAME OVER! {winner} team wins! Final score: RED {redTeamScore} - BLUE {blueTeamScore}");
+            // Maç bitişini kontrol et
+            CheckMatchEnd();
+            
+            if (isMatchActive)
+            {
+                // Sonraki set için hazırlık
+                StartCoroutine(PrepareNextSet());
+            }
         }
     }
     
-    void ShowGameEndUI(Team winner)
+    void CheckMatchEnd()
+    {
+        if (redTeamSets >= setsToWin || blueTeamSets >= setsToWin)
+        {
+            isMatchActive = false;
+            Team matchWinner = redTeamSets >= setsToWin ? Team.Red : Team.Blue;
+            
+            ShowMatchEndUI(matchWinner);
+            
+            OnMatchEnded?.Invoke(matchWinner, redTeamSets, blueTeamSets);
+            
+            Debug.Log($"MATCH OVER! {matchWinner} team wins! Final set score: RED {redTeamSets} - BLUE {blueTeamSets}");
+        }
+    }
+    
+    IEnumerator PrepareNextSet()
+    {
+        // Set arası UI göster
+        if (gameStatusText != null)
+        {
+            gameStatusText.gameObject.SetActive(true);
+            string winnerColor = lastSetWinner == Team.Red ? "#FF4444" : "#0080FF";
+            string winnerName = lastSetWinner.ToString().ToUpper();
+            
+            gameStatusText.text = $"<size=120%><b>SET {currentSet} BİTTİ!</b></size>\n" +
+                                 $"<size=100%><color={winnerColor}>{winnerName} SETİ KAZANDI!</color></size>\n" +
+                                 $"<size=90%>Skor: {redTeamScore} - {blueTeamScore}</size>\n" +
+                                 $"<size=100%>Set Durumu: RED {redTeamSets} - {blueTeamSets} BLUE</size>\n" +
+                                 $"<size=80%>Sonraki set 3 saniye sonra başlayacak...</size>";
+        }
+        
+        // 3 saniye bekle
+        yield return new WaitForSeconds(3f);
+        
+        // UI'ı kapat
+        if (gameStatusText != null)
+        {
+            gameStatusText.gameObject.SetActive(false);
+        }
+        
+        // Sonraki sete geç
+        currentSet++;
+        redTeamScore = 0;
+        blueTeamScore = 0;
+        
+        // Servis atan takım son seti kaybeden takım olur
+        servingTeam = lastSetWinner == Team.Red ? Team.Blue : Team.Red;
+        
+        isGameActive = true;
+        isRallyActive = true;
+        
+        UpdateScoreUI();
+        UpdateSetScoreUI();
+        
+        // Yeni rally başlat
+        StartCoroutine(StartNewRally(servingTeam));
+    }
+    
+    void ShowMatchEndUI(Team winner)
     {
         if (gameStatusText != null)
         {
@@ -226,40 +327,34 @@ public class GameManager : MonoBehaviour
             string winnerColor = winner == Team.Red ? "#FF4444" : "#0080FF";
             string winnerName = winner.ToString().ToUpper();
             
-            gameStatusText.text = $"<size=150%><b>OYUN BİTTİ!</b></size>\n" +
+            gameStatusText.text = $"<size=150%><b>MAÇ BİTTİ!</b></size>\n" +
                                  $"<size=120%><color={winnerColor}>{winnerName} KAZANDI!</color></size>\n" +
-                                 $"<size=100%>Skor: {redTeamScore} - {blueTeamScore}</size>\n" +
+                                 $"<size=100%>Set Skoru: {redTeamSets} - {blueTeamSets}</size>\n" +
                                  $"<size=80%>Yeniden başlatmak için R tuşuna basın</size>";
         }
     }
     
     IEnumerator StartNewRally(Team servingTeam)
     {
-        // Rally başlamadan önce biraz bekle
         yield return new WaitForSeconds(2f);
         
-        // Eski topu yok et
         if (ball != null)
         {
             Destroy(ball);
         }
         
-        // Yeni rally için rally durumunu aktif et
         isRallyActive = true;
         Debug.Log("New rally starting - scoring enabled");
         
-        // Servis atacak botu belirle (VR oyuncu servis atamaz)
         Transform server = GetServerForTeam(servingTeam);
         
         if (server != null)
         {
-            // Yeni topu oluştur
             Vector3 ballPosition = server.position + Vector3.up * 1.5f;
             ball = Instantiate(ballPrefab, ballPosition, Quaternion.identity);
             ball.name = "Ball";
             ball.tag = "Ball";
             
-            // Rigidbody ayarları
             Rigidbody ballRb = ball.GetComponent<Rigidbody>();
             if (ballRb == null)
             {
@@ -270,25 +365,21 @@ public class GameManager : MonoBehaviour
             ballRb.angularDrag = 0.5f;
             ballRb.useGravity = false;
             
-            // Collider
             if (ball.GetComponent<Collider>() == null)
             {
                 ball.AddComponent<SphereCollider>();
             }
             
-            // Bot'a topu ver ve servis attığını belirt
             BotController botController = server.GetComponent<BotController>();
             if (botController != null)
             {
-                // StartWithBall metoduna isServing parametresi eklenecek
-                botController.StartWithBall(ball, true); // true = servis atıyor
+                botController.StartWithBall(ball, true);
                 Debug.Log($"{server.name} is serving for {servingTeam} team to opponent!");
             }
         }
         else
         {
             Debug.LogError($"No bot found to serve for {servingTeam} team!");
-            // Rally'yi tekrar aktif et
             isRallyActive = true;
         }
     }
@@ -297,7 +388,6 @@ public class GameManager : MonoBehaviour
     {
         List<Transform> teamMembers = new List<Transform>();
         
-        // Sadece botları ekle (VR oyuncu servis atamaz)
         foreach (GameObject bot in bots)
         {
             if (bot != null)
@@ -310,15 +400,11 @@ public class GameManager : MonoBehaviour
             }
         }
         
-        // VR oyuncu servis atamaz, bu yüzden onu ekleMİyoruz
-        
-        // Rastgele bir bot seç
         if (teamMembers.Count > 0)
         {
             return teamMembers[Random.Range(0, teamMembers.Count)];
         }
         
-        // Eğer bu takımda bot yoksa (sadece VR oyuncu varsa), karşı takımdan bir bot seç
         Debug.LogWarning($"No bots found in {team} team for serving. Selecting from opposite team.");
         
         Team oppositeTeam = team == Team.Red ? Team.Blue : Team.Red;
@@ -342,16 +428,21 @@ public class GameManager : MonoBehaviour
         return null;
     }
     
-    // Skoru sıfırla
     public void ResetScore()
     {
+        // Tüm skorları sıfırla
         redTeamScore = 0;
         blueTeamScore = 0;
+        redTeamSets = 0;
+        blueTeamSets = 0;
+        currentSet = 1;
         servingTeam = Team.Blue;
         isGameActive = true;
-        isRallyActive = true; // Rally'yi de aktif et
+        isRallyActive = true;
+        isMatchActive = true;
         
         UpdateScoreUI();
+        UpdateSetScoreUI();
         
         if (gameStatusText != null)
         {
@@ -423,13 +514,11 @@ public class GameManager : MonoBehaviour
     
     void Update()
     {
-        // R tuşu ile oyunu yeniden başlat (PC test için)
         if (Input.GetKeyDown(KeyCode.R))
         {
             RestartGame();
         }
         
-        // Alternatif: Legacy input fallback
         if (Input.GetKeyDown(KeyCode.JoystickButton0) || 
             Input.GetKeyDown(KeyCode.JoystickButton1) || 
             Input.GetKeyDown(KeyCode.JoystickButton2) || 
@@ -442,18 +531,14 @@ public class GameManager : MonoBehaviour
     
     void SetupGame()
     {
-        // Skoru sıfırla
         ResetScore();
         
-        // VR oyuncu var mı kontrol et
         GameObject vrPlayer = GameObject.FindWithTag("Player");
         bool hasVRPlayer = vrPlayer != null;
         
-        // Pozisyon sayısını kontrol et
         int blueCount = blueTeamPositions != null ? blueTeamPositions.Length : 0;
         int redCount = redTeamPositions != null ? redTeamPositions.Length : 0;
         
-        // VR oyuncu varsa, onun takımından bir bot eksilt
         if (hasVRPlayer)
         {
             VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
@@ -480,11 +565,9 @@ public class GameManager : MonoBehaviour
             return;
         }
         
-        // Bot dizisini oluştur
         bots = new GameObject[totalBots];
         int botIndex = 0;
         
-        // Blue takım botlarını oluştur
         for (int i = 0; i < blueCount; i++)
         {
             if (blueTeamPositions[i] != null)
@@ -502,7 +585,6 @@ public class GameManager : MonoBehaviour
             }
         }
         
-        // Red takım botlarını oluştur
         for (int i = 0; i < redCount; i++)
         {
             if (redTeamPositions[i] != null)
@@ -520,13 +602,11 @@ public class GameManager : MonoBehaviour
             }
         }
         
-        // Botların pozisyonlarına yerleşmesini bekle ve oyunu başlat
         StartCoroutine(StartGameAfterPositioning());
     }
     
     IEnumerator StartGameAfterPositioning()
     {
-        // Bir frame bekle - botların pozisyonlarına yerleşmesi için
         yield return null;
         
         if (bots == null || bots.Length == 0)
@@ -535,7 +615,6 @@ public class GameManager : MonoBehaviour
             yield break;
         }
         
-        // VR oyuncu var mı kontrol et
         GameObject vrPlayer = GameObject.FindWithTag("Player");
         VRPlayerProxy vrProxy = null;
         
@@ -544,7 +623,6 @@ public class GameManager : MonoBehaviour
             vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
         }
         
-        // TÜM botların yakalama iznini aç (başlangıçta)
         for (int i = 0; i < bots.Length; i++)
         {
             if (bots[i] != null)
@@ -554,22 +632,18 @@ public class GameManager : MonoBehaviour
             }
         }
         
-        // VR oyuncu varsa ona da izin ver
         if (vrProxy != null)
         {
             vrProxy.canCatchBall = true;
         }
         
-        // Rally durumunu aktif et
         isRallyActive = true;
         
-        // İlk servisi başlat
         StartCoroutine(StartNewRally(servingTeam));
     }
     
     void RestartGame()
     {
-        // Eski objeleri temizle
         if (bots != null)
         {
             foreach (GameObject bot in bots)
@@ -579,7 +653,6 @@ public class GameManager : MonoBehaviour
         }
         if (ball != null) Destroy(ball);
         
-        // Oyunu yeniden kur
         SetupGame();
     }
     
@@ -587,22 +660,18 @@ public class GameManager : MonoBehaviour
     {
         Debug.Log("Restarting scene...");
         
-        // Mevcut sahneyi yeniden yükle
         Scene currentScene = SceneManager.GetActiveScene();
         SceneManager.LoadScene(currentScene.name);
     }
     
-    // Rally durumunu kontrol eden public metod
     public bool IsRallyActive()
     {
         return isRallyActive;
     }
     
-    // Rally'yi manuel olarak bitiren metod (debug için)
     public void EndRally()
     {
         isRallyActive = false;
         Debug.Log("Rally manually ended");
     }
-    
 }
