@@ -645,154 +645,187 @@ public class BotController : MonoBehaviour
     
     public static void OnVRPlayerHitBall(Vector3 ballPosition, Vector3 ballVelocity)
     {
+        // VR Player'ın takımını bul
+        GameObject vrPlayer = GameObject.FindWithTag("Player");
+        Team vrTeam = Team.Blue; // varsayılan
+    
+        if (vrPlayer != null)
+        {
+            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null)
+            {
+                vrTeam = vrProxy.playerTeam;
+            }
+        }
+    
         if (activeCatcher != null)
         {
             activeCatcher.StopMoving();
         }
         activeCatcher = null;
-        
+    
         predictedLandingPoint = PredictBallLandingPoint(ballPosition, ballVelocity);
         isPredictionValid = true;
         lastPredictionTime = Time.time;
-        
-        Debug.Log($"VR Player hit ball! Predicted landing: {predictedLandingPoint}");
-        
+    
+        Debug.Log($"VR Player ({vrTeam}) hit ball! Predicted landing: {predictedLandingPoint}");
+    
         FindAndActivateClosestBot();
     }
     
-    static void FindAndActivateClosestBot()
+static void FindAndActivateClosestBot()
+{
+    if (allBots == null || allBots.Length == 0)
     {
-        if (allBots == null || allBots.Length == 0)
+        allBots = FindObjectsOfType<BotController>();
+        Debug.LogWarning($"Bot list was empty, refetched: {allBots.Length} bots found");
+    }
+    
+    if (!isPredictionValid || allBots == null || allBots.Length == 0)
+    {
+        Debug.LogError("Cannot find closest bot - no valid bots or prediction!");
+        return;
+    }
+    
+    Debug.Log($"Finding closest bot to landing point: {predictedLandingPoint}");
+    Debug.Log($"Total bots available: {allBots.Length}");
+    
+    // DEBUG: Tüm botların durumunu kontrol et
+    Debug.Log("=== BOT STATUS CHECK ===");
+    for (int j = 0; j < allBots.Length; j++)
+    {
+        if (allBots[j] != null)
         {
-            allBots = FindObjectsOfType<BotController>();
-            Debug.LogWarning($"Bot list was empty, refetched: {allBots.Length} bots found");
+            Debug.Log($"Bot[{j}] {allBots[j].gameObject.name} - Team: {allBots[j].team}, CanCatch: {allBots[j].canCatchBall}, HasBall: {allBots[j].hasBall}");
         }
-        
-        if (!isPredictionValid || allBots == null || allBots.Length == 0)
+    }
+    Debug.Log("=======================");
+    
+    BotController closestBot = null;
+    float closestDistance = float.MaxValue;
+    int validBotCount = 0;
+    int boundaryViolationCount = 0;
+    int wrongCourtCount = 0;
+    int cannotCatchCount = 0; // Yeni sayaç
+    
+    for (int i = 0; i < allBots.Length; i++)
+    {
+        BotController bot = allBots[i];
+        if (bot != null)
         {
-            Debug.LogError("Cannot find closest bot - no valid bots or prediction!");
-            return;
-        }
-        
-        Debug.Log($"Finding closest bot to landing point: {predictedLandingPoint}");
-        Debug.Log($"Total bots available: {allBots.Length}");
-        
-        BotController closestBot = null;
-        float closestDistance = float.MaxValue;
-        int validBotCount = 0;
-        int boundaryViolationCount = 0;
-        int wrongCourtCount = 0;
-        
-        for (int i = 0; i < allBots.Length; i++)
-        {
-            BotController bot = allBots[i];
-            if (bot != null)
+            // Önce canCatchBall kontrolü
+            if (!bot.canCatchBall)
             {
-                // File sınırı kontrolü
-                if (!bot.CanMoveToPosition(predictedLandingPoint))
+                cannotCatchCount++;
+                Debug.Log($"Bot[{i}] {bot.gameObject.name} - CanCatchBall is FALSE!");
+                continue;
+            }
+            
+            // File sınırı kontrolü
+            if (!bot.CanMoveToPosition(predictedLandingPoint))
+            {
+                boundaryViolationCount++;
+                Debug.Log($"Bot[{i}] {bot.gameObject.name} cannot reach landing point due to boundary violation");
+                continue;
+            }
+            
+            // SADECE Red takım için saha dışı kontrolü yap
+            if (bot.team == Team.Red)
+            {
+                if (!bot.IsBallInOurCourt(predictedLandingPoint))
                 {
-                    boundaryViolationCount++;
-                    Debug.Log($"Bot[{i}] {bot.gameObject.name} cannot reach landing point due to boundary violation");
+                    wrongCourtCount++;
+                    Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball will land in opponent court");
                     continue;
                 }
                 
-                // Karşı takımdan gelen ve dışarı düşen toplar için kontrol - SADECE RED TAKIM İÇİN
-                if (bot.team == Team.Red)
+                // Top bizim sahamızda ama dışarı düşüyorsa ve karşıdan geliyorsa gitmesin
+                if (!bot.IsBallInBounds(predictedLandingPoint))
                 {
-                    if (!bot.IsBallInOurCourt(predictedLandingPoint))
+                    // VR Player veya karşı takımdan mı geliyor kontrol et
+                    bool isFromOpponent = false;
+                    
+                    // Son vuran VR Player mı?
+                    GameObject vrPlayer = GameObject.FindWithTag("Player");
+                    if (vrPlayer != null)
                     {
-                        // Top karşı sahada
-                        wrongCourtCount++;
-                        Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball will land in opponent court");
-                        continue;
+                        VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+                        if (vrProxy != null && vrProxy.playerTeam != bot.team)
+                        {
+                            isFromOpponent = true;
+                        }
                     }
                     
-                    // Top bizim sahamızda ama dışarı düşüyorsa ve karşıdan geliyorsa gitmesin
-                    if (!bot.IsBallInBounds(predictedLandingPoint))
+                    // Son vuran karşı takım botu mu?
+                    if (!isFromOpponent && cachedBall != null)
                     {
-                        // VR Player veya karşı takımdan mı geliyor kontrol et
-                        bool isFromOpponent = false;
-                        
-                        // Son vuran VR Player mı?
-                        GameObject vrPlayer = GameObject.FindWithTag("Player");
-                        if (vrPlayer != null)
+                        VolleyballBall vbBall = cachedBall.GetComponent<VolleyballBall>();
+                        if (vbBall != null && vbBall.currentTeam != bot.team)
                         {
-                            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
-                            if (vrProxy != null && vrProxy.playerTeam != bot.team)
-                            {
-                                isFromOpponent = true;
-                            }
-                        }
-                        
-                        // Son vuran karşı takım botu mu?
-                        if (!isFromOpponent && cachedBall != null)
-                        {
-                            VolleyballBall vbBall = cachedBall.GetComponent<VolleyballBall>();
-                            if (vbBall != null && vbBall.currentTeam != bot.team)
-                            {
-                                isFromOpponent = true;
-                            }
-                        }
-                        
-                        if (isFromOpponent)
-                        {
-                            Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball from opponent going out, not chasing");
-                            continue;
+                            isFromOpponent = true;
                         }
                     }
-                }
-                // Blue takım için bu kontrolleri yapma
-                else if (bot.team == Team.Blue)
-                {
-                    // Blue takım sadece file sınırına bakar, dışarı giden toplara da gider
-                    if (!bot.IsBallInOurCourt(predictedLandingPoint))
+                    
+                    if (isFromOpponent)
                     {
-                        wrongCourtCount++;
-                        Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball will land in opponent court");
+                        Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball from opponent going out, not chasing");
                         continue;
                     }
                 }
-                
-                float distance = Vector3.Distance(bot.transform.position, predictedLandingPoint);
-                
-                Debug.Log($"Bot[{i}] {bot.gameObject.name} - CanCatch: {bot.canCatchBall}, HasBall: {bot.hasBall}, Distance: {distance:F2}");
-                
-                if (bot.canCatchBall && !bot.hasBall)
+            }
+            // Blue takım için alternatif çözüm uygulandı
+            else if (bot.team == Team.Blue)
+            {
+                // Blue takım için sadece karşı sahaya düşme kontrolü
+                if (predictedLandingPoint.x < 0) // Red sahaya düşüyorsa
                 {
-                    validBotCount++;
-                    if (distance < closestDistance)
-                    {
-                        closestDistance = distance;
-                        closestBot = bot;
-                    }
+                    wrongCourtCount++;
+                    Debug.Log($"Blue bot {bot.gameObject.name} - ball will land in Red court");
+                    continue;
                 }
+                // Saha dışı kontrolü YOK - Blue takım her yere gider
             }
-            else
+            
+            float distance = Vector3.Distance(bot.transform.position, predictedLandingPoint);
+            
+            Debug.Log($"Bot[{i}] {bot.gameObject.name} - Team: {bot.team}, CanCatch: {bot.canCatchBall}, HasBall: {bot.hasBall}, Distance: {distance:F2}");
+            
+            if (bot.canCatchBall && !bot.hasBall)
             {
-                Debug.LogWarning($"Bot[{i}] is null!");
-            }
-        }
-        
-        Debug.Log($"Valid bots: {validBotCount}, Boundary violations: {boundaryViolationCount}, Wrong court: {wrongCourtCount}");
-        
-        if (closestBot != null)
-        {
-            if (closestDistance < 20f)
-            {
-                closestBot.StartMovingToBall(predictedLandingPoint);
-                activeCatcher = closestBot;
-                Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving! Distance: {closestDistance:F2}");
-            }
-            else
-            {
-                Debug.LogWarning($"Closest bot {closestBot.gameObject.name} is too far: {closestDistance:F2}");
+                validBotCount++;
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestBot = bot;
+                }
             }
         }
         else
         {
-            Debug.LogError($"No valid bot found! Total: {allBots.Length}, Valid: {validBotCount}");
+            Debug.LogWarning($"Bot[{i}] is null!");
         }
     }
+    
+    Debug.Log($"Summary - Valid: {validBotCount}, Cannot catch: {cannotCatchCount}, Boundary violations: {boundaryViolationCount}, Wrong court: {wrongCourtCount}");
+    
+    if (closestBot != null)
+    {
+        if (closestDistance < 20f)
+        {
+            closestBot.StartMovingToBall(predictedLandingPoint);
+            activeCatcher = closestBot;
+            Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving! Distance: {closestDistance:F2}");
+        }
+        else
+        {
+            Debug.LogWarning($"Closest bot {closestBot.gameObject.name} is too far: {closestDistance:F2}");
+        }
+    }
+    else
+    {
+        Debug.LogError($"No valid bot found! Total: {allBots.Length}, Valid: {validBotCount}");
+    }
+}
     
     static Vector3 PredictBallLandingPoint(Vector3 startPos, Vector3 velocity)
     {
@@ -841,41 +874,30 @@ public class BotController : MonoBehaviour
                 return false;
             }
         }
-        
-        // Saha dışı kontrolü
-        if (courtManager != null)
+    
+        // Saha dışı kontrolü - SADECE RED TAKIM İÇİN
+        if (team == Team.Red && courtManager != null)
         {
             float halfLength = courtManager.courtLength / 2f;
             float halfWidth = courtManager.courtWidth / 2f;
-            
-            // Z ekseni (yan çizgiler) kontrolü - tüm botlar için
+        
+            // Z ekseni (yan çizgiler) kontrolü
             if (Mathf.Abs(targetPosition.z) > halfWidth + outOfBoundsLimit)
             {
-                Debug.LogWarning($"{gameObject.name} cannot move too far out of bounds! Target Z: {targetPosition.z:F2}");
+                Debug.LogWarning($"Red team bot {gameObject.name} cannot move too far out of bounds! Target Z: {targetPosition.z:F2}");
                 return false;
             }
-            
-            // X ekseni (arka çizgi) kontrolü - takıma göre
-            if (team == Team.Red)
+        
+            // X ekseni (arka çizgi) kontrolü
+            if (targetPosition.x < -halfLength - outOfBoundsLimit)
             {
-                // Red takım için arka çizgi sınırı
-                if (targetPosition.x < -halfLength - outOfBoundsLimit)
-                {
-                    Debug.LogWarning($"Red team bot {gameObject.name} cannot move too far behind court! Target X: {targetPosition.x:F2}");
-                    return false;
-                }
-            }
-            else if (team == Team.Blue)
-            {
-                // Blue takım için arka çizgi sınırı
-                if (targetPosition.x > halfLength + outOfBoundsLimit)
-                {
-                    Debug.LogWarning($"Blue team bot {gameObject.name} cannot move too far behind court! Target X: {targetPosition.x:F2}");
-                    return false;
-                }
+                Debug.LogWarning($"Red team bot {gameObject.name} cannot move too far behind court! Target X: {targetPosition.x:F2}");
+                return false;
             }
         }
-        
+    
+        // Blue takım için saha dışı kontrolü YOK - istedikleri yere gidebilirler (file hariç)
+    
         return true;
     }
     
