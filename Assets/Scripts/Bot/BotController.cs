@@ -28,7 +28,7 @@ public class BotController : MonoBehaviour
     public bool enableMovement = true;
     public float maxMoveDistance = 20f;
     public float netBoundary = 0.5f; // File sınırı mesafesi
-    public float outOfBoundsLimit = 1f; // Saha dışına çıkma limiti
+    public float outOfBoundsLimit = 2f; // Saha dışına çıkma limiti
     
     [Header("Default Position")]
     public Transform defaultPosition;
