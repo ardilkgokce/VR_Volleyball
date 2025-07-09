@@ -18,6 +18,8 @@ public class BotController : MonoBehaviour
     [Header("Bot Settings")]
     public float detectionRadius = 5f;
     public float catchRadius = 1.5f;
+    public float catchHeight = 1.5f; // Yakalama alanının yerden yüksekliği
+    public float catchVerticalRange = 1f; // Yakalama alanının dikey genişliği
     public float throwForce = 10f;
     public float throwHeight = 5f;
     
@@ -33,19 +35,21 @@ public class BotController : MonoBehaviour
     [Header("Animation Settings")]
     public BotAnimationController animationController;
     
+    [Header("Hit Point")]
+    public Transform hitPoint; // Topun vuruş anında konumlanacağı nokta
+    
     [Header("Default Position")]
     public Transform defaultPosition;
     public float returnToDefaultDelay = 2f;
     public bool autoReturnToDefault = true;
     
     [Header("References")]
-    private Transform targetBot;
-    private GameObject ball;
-    private Rigidbody ballRb;
-    private bool hasBall = false;
-    private float catchCooldown = 0f;
-    [HideInInspector] 
-    public bool canCatchBall = true;
+    [HideInInspector] public Transform targetBot;
+    [HideInInspector] public GameObject ball;
+    [HideInInspector] public Rigidbody ballRb;
+    [HideInInspector] public bool hasBall = false;
+    [HideInInspector] public float catchCooldown = 0f;
+    [HideInInspector] public bool canCatchBall = true;
     public Transform lastThrower;
     
     [Header("Visual")]
@@ -59,12 +63,21 @@ public class BotController : MonoBehaviour
     public int trajectoryPoints = 30;
     private Vector3 landingPoint;
     
+    // State Machine
+    private BotState currentState;
+    private string currentStateName = "None";
+    
+    // State flags (public için)
+    [HideInInspector] public bool isMovingToBall = false;
+    [HideInInspector] public bool isReturningToDefault = false;
+    [HideInInspector] public bool isPerformingVolley = false;
+    
     // Cache
     private static BotController[] allBots;
     private static List<Transform> validTargets = new List<Transform>();
     private Transform myTransform;
-    private static readonly Vector3 catchOffset = Vector3.up * 1.5f;
-    private static readonly Vector3 playerCatchOffset = Vector3.up * 1f;
+    public static readonly Vector3 catchOffset = Vector3.up * 1.5f;
+    public static readonly Vector3 playerCatchOffset = Vector3.up * 1f;
     private WaitForSeconds colorResetDelay;
     
     // Court manager referansı
@@ -72,9 +85,7 @@ public class BotController : MonoBehaviour
     
     // Movement
     private Vector3 targetMovePosition;
-    private bool isMovingToBall = false;
-    private bool isReturningToDefault = false;
-    private static BotController activeCatcher = null;
+    public static BotController activeCatcher = null;
     
     // Ball prediction
     private static Vector3 predictedLandingPoint;
@@ -87,10 +98,6 @@ public class BotController : MonoBehaviour
     private static Transform cachedBallTransform;
     private Collider[] nearbyColliders = new Collider[10];
     private int colliderCount;
-    
-    // Animation states
-    private float currentMoveSpeed = 0f;
-    private bool isPerformingVolley = false;
     
     void Awake()
     {
@@ -113,6 +120,12 @@ public class BotController : MonoBehaviour
             Debug.LogWarning($"{gameObject.name}: BotAnimationController component not found! Animations will not work.");
         }
         
+        // Hit point kontrolü
+        if (hitPoint == null)
+        {
+            Debug.LogWarning($"{gameObject.name}: Hit Point not assigned! Ball positioning may not work correctly.");
+        }
+        
         if (defaultPosition == null)
         {
             GameObject defaultPosObj = new GameObject($"{gameObject.name}_DefaultPosition");
@@ -125,7 +138,7 @@ public class BotController : MonoBehaviour
     
     void Start()
     {
-        UpdateBotColor();
+        UpdateBotColorInternal();
         
         // Court manager'ı bul
         courtManager = FindObjectOfType<VolleyballCourtManager>();
@@ -150,6 +163,9 @@ public class BotController : MonoBehaviour
         Debug.Log($"{gameObject.name} başlatıldı. Team: {team}, CanCatch: {canCatchBall}");
         
         StartCoroutine(CacheAllBotsDelayed());
+        
+        // Başlangıç state'i
+        ChangeState(new IdleState(this));
     }
     
     System.Collections.IEnumerator CacheAllBotsDelayed()
@@ -173,73 +189,57 @@ public class BotController : MonoBehaviour
             catchCooldown -= Time.deltaTime;
         }
         
-        // Animasyon güncellemeleri
-        UpdateAnimations();
+        // State Update
+        if (currentState != null)
+        {
+            currentState.Update();
+        }
     }
 
     void FixedUpdate()
     {
-        if (!hasBall && canCatchBall && catchCooldown <= 0)
+        // State FixedUpdate
+        if (currentState != null)
         {
-            CheckForBall();
-        }
-        
-        TrackBall();
-        
-        if (enableMovement)
-        {
-            if (isReturningToDefault)
-            {
-                ReturnToDefaultPosition();
-            }
-            else if (isMovingToBall && !hasBall && activeCatcher == this)
-            {
-                MoveToTarget();
-            }
+            currentState.FixedUpdate();
         }
     }
     
-    void UpdateAnimations()
+    // State değiştirme metodu
+    public void ChangeState(BotState newState)
     {
-        if (animationController == null) return;
-        
-        // Hareket durumunu kontrol et
-        bool isMoving = isMovingToBall || isReturningToDefault;
-        
-        if (isMoving)
+        if (currentState != null)
         {
-            Vector3 direction = targetMovePosition - myTransform.position;
-            float distance = direction.magnitude;
-            
-            // Mesafeye göre hız ayarla
-            if (distance > 3f)
-            {
-                currentMoveSpeed = runSpeed;
-            }
-            else
-            {
-                currentMoveSpeed = moveSpeed;
-            }
-        }
-        else
-        {
-            // Yavaşça sıfıra düş
-            currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, 0f, Time.deltaTime * 5f);
+            currentState.Exit();
         }
         
-        // Animation controller'a güncellemeyi gönder
-        animationController.UpdateMovementAnimation(currentMoveSpeed, isMoving);
+        currentState = newState;
+        currentStateName = newState.GetType().Name;
+        
+        if (currentState != null)
+        {
+            currentState.Enter();
+        }
+        
+        if (showTrajectory)
+        {
+            Debug.Log($"{gameObject.name} changed state to: {currentStateName}");
+        }
     }
-
-    void CheckForBall()
+    
+    // Internal metodlar - State'ler tarafından kullanılacak
+    internal void CheckForBallInternal()
     {
         if (Time.frameCount % 60 == 0 && showTrajectory)
         {
             Debug.Log($"{gameObject.name} - CanCatch: {canCatchBall}, Cooldown: {catchCooldown:F2}");
         }
         
+        // Yakalama merkezi pozisyonu (yerden catchHeight kadar yukarıda)
+        Vector3 catchCenter = myTransform.position + Vector3.up * catchHeight;
+        
         int layerMask = 1 << LayerMask.NameToLayer("Default");
-        colliderCount = Physics.OverlapSphereNonAlloc(myTransform.position, detectionRadius, nearbyColliders, layerMask);
+        colliderCount = Physics.OverlapSphereNonAlloc(catchCenter, detectionRadius, nearbyColliders, layerMask);
         
         for (int i = 0; i < colliderCount; i++)
         {
@@ -256,21 +256,33 @@ public class BotController : MonoBehaviour
                 {
                     float ballSpeed = cachedBallRb.velocity.magnitude;
                     Vector3 ballPos = cachedBallTransform.position;
-                    float distance = Vector3.Distance(myTransform.position, ballPos);
+                    
+                    // Yatay mesafe kontrolü
+                    Vector3 horizontalDiff = ballPos - myTransform.position;
+                    horizontalDiff.y = 0;
+                    float horizontalDistance = horizontalDiff.magnitude;
+                    
+                    // Dikey mesafe kontrolü
+                    float ballHeight = ballPos.y;
+                    float minCatchHeight = catchHeight - catchVerticalRange;
+                    float maxCatchHeight = catchHeight + catchVerticalRange;
+                    
+                    bool isInVerticalRange = ballHeight >= minCatchHeight && ballHeight <= maxCatchHeight;
+                    bool isInHorizontalRange = horizontalDistance < catchRadius;
                     
                     if (showTrajectory && Time.frameCount % 30 == 0)
                     {
-                        Debug.Log($"{gameObject.name} - Top hızı: {ballSpeed:F2}, Mesafe: {distance:F2}");
+                        Debug.Log($"{gameObject.name} - Ball: Speed={ballSpeed:F2}, HorizDist={horizontalDistance:F2}, Height={ballHeight:F2}, InRange={isInHorizontalRange && isInVerticalRange}");
                     }
                     
-                    if (ballSpeed > 0.5f)
+                    if (ballSpeed > 0.5f && isInHorizontalRange && isInVerticalRange)
                     {
                         Vector3 ballVelocity = cachedBallRb.velocity;
                         Vector3 toBall = ballPos - myTransform.position;
                         
                         float dotProduct = Vector3.Dot(ballVelocity.normalized, -toBall.normalized);
                         
-                        if (dotProduct > 0.3f && distance < catchRadius)
+                        if (dotProduct > 0.3f)
                         {
                             ball = cachedBall;
                             ballRb = cachedBallRb;
@@ -280,17 +292,12 @@ public class BotController : MonoBehaviour
                             {
                                 if (volleyballBall.OnHit(myTransform, team))
                                 {
-                                    if (isMovingToBall)
+                                    // Hedef seç ve vuruş state'ine geç
+                                    targetBot = GetRandomTarget();
+                                    if (targetBot != null && ball != null)
                                     {
-                                        StopMoving();
+                                        ChangeState(new PreparingHitState(this, targetBot, ball));
                                     }
-                                    
-                                    // Voleybol animasyonunu tetikle ve hemen topu fırlat
-                                    if (animationController != null)
-                                    {
-                                        animationController.PlayVolleyAnimation();
-                                    }
-                                    InstantThrow();
                                 }
                                 else
                                 {
@@ -299,16 +306,12 @@ public class BotController : MonoBehaviour
                             }
                             else
                             {
-                                if (isMovingToBall)
+                                // Eski sistem için de aynı işlem
+                                targetBot = GetRandomTarget();
+                                if (targetBot != null && ball != null)
                                 {
-                                    StopMoving();
+                                    ChangeState(new PreparingHitState(this, targetBot, ball));
                                 }
-                                
-                                if (animationController != null)
-                                {
-                                    animationController.PlayVolleyAnimation();
-                                }
-                                InstantThrow();
                             }
                             
                             break;
@@ -319,19 +322,23 @@ public class BotController : MonoBehaviour
         }
     }
     
-
-    
-    void TrackBall()
+    internal void TrackBallInternal()
     {
         if (hasBall && targetBot != null)
         {
-            LookAtTarget(targetBot.position);
+            if (animationController != null)
+            {
+                animationController.LookAt(targetBot.position, rotationSpeed);
+            }
             return;
         }
         
         if (cachedBall != null && cachedBallRb != null && cachedBallRb.velocity.magnitude > 0.5f)
         {
-            LookAtTarget(cachedBallTransform.position);
+            if (animationController != null)
+            {
+                animationController.LookAt(cachedBallTransform.position, rotationSpeed);
+            }
             return;
         }
         
@@ -353,26 +360,65 @@ public class BotController : MonoBehaviour
         }
     }
     
-    void LookAtTarget(Vector3 targetPosition)
+    internal void UpdateBotColorInternal()
     {
-        if (animationController != null)
+        if (botRenderer != null)
         {
-            animationController.LookAt(targetPosition, rotationSpeed);
+            botRenderer.material.color = hasBall ? hasBallColor : normalColor;
+        }
+    }
+    
+    internal void CalculateLandingPointInternal(Vector3 startPosition, Vector3 velocity)
+    {
+        if (targetBot == null) return;
+        
+        float targetHeight;
+        
+        if (targetBot.CompareTag("Player"))
+        {
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null && vrProxy.GetTargetTransform() != null)
+            {
+                targetHeight = vrProxy.GetTargetTransform().position.y;
+            }
+            else
+            {
+                targetHeight = targetBot.position.y + 1.2f;
+            }
         }
         else
         {
-            // Fallback - animasyon controller yoksa eski yöntem
-            Vector3 direction = targetPosition - myTransform.position;
-            direction.y = 0;
-            
-            if (direction != Vector3.zero)
+            // Bot için catch height kullan
+            BotController targetBotController = targetBot.GetComponent<BotController>();
+            if (targetBotController != null)
             {
-                Quaternion targetRotation = Quaternion.LookRotation(direction);
-                myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+                targetHeight = targetBot.position.y + targetBotController.catchHeight + 0.1f;
+            }
+            else
+            {
+                targetHeight = targetBot.position.y + 1.5f;
+            }
+        }
+        
+        float a = 0.5f * Physics.gravity.y;
+        float b = velocity.y;
+        float c = startPosition.y - targetHeight;
+        
+        float discriminant = b * b - 4 * a * c;
+        if (discriminant >= 0)
+        {
+            float t1 = (-b - Mathf.Sqrt(discriminant)) / (2 * a);
+            float t2 = (-b + Mathf.Sqrt(discriminant)) / (2 * a);
+            float time = Mathf.Max(t1, t2);
+            
+            if (time > 0)
+            {
+                landingPoint = CalculatePositionAtTime(startPosition, velocity, time);
             }
         }
     }
     
+    // Public metodlar - dışarıdan erişim için
     Transform GetRandomTarget()
     {
         validTargets.Clear();
@@ -515,200 +561,35 @@ public class BotController : MonoBehaviour
         return null;
     }
     
-    void ThrowBallToTarget()
+    // Hedef pozisyonunu hesaplayan yardımcı metod
+    public Vector3 GetTargetPosition(Transform target)
     {
-        targetBot = GetRandomTarget();
+        if (target == null) return Vector3.zero;
         
-        if (targetBot == null || ball == null)
+        if (target.CompareTag("Player"))
         {
-            Debug.LogError("Target bot veya ball null!");
-            return;
-        }
-        
-        bool isTargetVRPlayer = targetBot.CompareTag("Player");
-        
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            if (showTrajectory)
-                Debug.Log($"{gameObject.name} ({team}) topu VR Player ({vrProxy.playerTeam})'e fırlatıyor!");
-            
-            hasBall = false;
-            catchCooldown = 0.5f;
-            canCatchBall = false;
-            
-            for (int i = 0; i < allBots.Length; i++)
+            VRPlayerProxy vrProxy = target.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null && vrProxy.GetTargetTransform() != null)
             {
-                allBots[i].canCatchBall = false;
-                allBots[i].lastThrower = myTransform;
+                return vrProxy.GetTargetTransform().position + playerCatchOffset;
             }
-            
-            vrProxy.EnableCatching();
-        }
-        else
-        {
-            BotController targetController = targetBot.GetComponent<BotController>();
-            if (showTrajectory)
-                Debug.Log($"{gameObject.name} ({team}) topu {targetBot.name} ({targetController.team})'e fırlatıyor!");
-            
-            hasBall = false;
-            catchCooldown = 0.5f;
-            canCatchBall = false;
-            
-            for (int i = 0; i < allBots.Length; i++)
+            else
             {
-                allBots[i].canCatchBall = false;
-                allBots[i].lastThrower = myTransform;
+                return target.position + playerCatchOffset;
             }
-            
-            targetController.EnableCatching();
-        }
-        
-        ball.transform.SetParent(null);
-        ballRb.useGravity = true;
-        
-        Vector3 targetPosition;
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            targetPosition = vrProxy.GetTargetTransform().position + playerCatchOffset;
         }
         else
         {
-            targetPosition = targetBot.position + catchOffset;
-        }
-        
-        Vector3 direction = targetPosition - ball.transform.position;
-        float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
-        
-        float gravity = Mathf.Abs(Physics.gravity.y);
-        float heightDifference = targetPosition.y - ball.transform.position.y;
-        float dragCompensation = 1f + (ballRb.drag * 0.2f * horizontalDistance / 10f);
-        float angle = 45f * Mathf.Deg2Rad;
-        
-        float v0 = Mathf.Sqrt((gravity * horizontalDistance * horizontalDistance) / 
-                             (2 * Mathf.Cos(angle) * Mathf.Cos(angle) * 
-                             (horizontalDistance * Mathf.Tan(angle) - heightDifference)));
-        
-        v0 *= dragCompensation;
-        
-        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
-        finalVelocity.y = v0 * Mathf.Sin(angle);
-        
-        ballRb.velocity = finalVelocity;
-        
-        CalculateLandingPoint(ball.transform.position, finalVelocity);
-        
-        UpdateBotColor();
-        
-        ball = null;
-        ballRb = null;
-        
-        if (autoReturnToDefault)
-        {
-            StartCoroutine(ReturnToDefaultAfterDelay());
-        }
-    }
-    
-    void ThrowServiceToOpponent()
-    {
-        targetBot = GetOpponentTarget();
-        
-        if (targetBot == null || ball == null)
-        {
-            Debug.LogError("Service target or ball is null!");
-            ThrowBallToTarget();
-            return;
-        }
-        
-        bool isTargetVRPlayer = targetBot.CompareTag("Player");
-        
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            if (showTrajectory)
-                Debug.Log($"{gameObject.name} ({team}) servis atıyor → VR Player ({vrProxy.playerTeam})!");
-        }
-        else
-        {
-            BotController targetController = targetBot.GetComponent<BotController>();
-            if (showTrajectory)
-                Debug.Log($"{gameObject.name} ({team}) servis atıyor → {targetBot.name} ({targetController.team})!");
-        }
-        
-        hasBall = false;
-        catchCooldown = 0.5f;
-        canCatchBall = false;
-        
-        for (int i = 0; i < allBots.Length; i++)
-        {
-            allBots[i].canCatchBall = false;
-            allBots[i].lastThrower = myTransform;
-        }
-        
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            vrProxy.EnableCatching();
-        }
-        else
-        {
-            BotController targetController = targetBot.GetComponent<BotController>();
-            targetController.EnableCatching();
-        }
-        
-        ball.transform.SetParent(null);
-        ballRb.useGravity = true;
-        
-        Vector3 targetPosition;
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            targetPosition = vrProxy.GetTargetTransform().position + playerCatchOffset;
-        }
-        else
-        {
-            targetPosition = targetBot.position + catchOffset;
-        }
-        
-        Vector3 direction = targetPosition - ball.transform.position;
-        float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
-        
-        float gravity = Mathf.Abs(Physics.gravity.y);
-        float heightDifference = targetPosition.y - ball.transform.position.y;
-        float dragCompensation = 1f + (ballRb.drag * 0.2f * horizontalDistance / 10f);
-        float angle = 45f * Mathf.Deg2Rad;
-        
-        float v0 = Mathf.Sqrt((gravity * horizontalDistance * horizontalDistance) / 
-                             (2 * Mathf.Cos(angle) * Mathf.Cos(angle) * 
-                             (horizontalDistance * Mathf.Tan(angle) - heightDifference)));
-        
-        v0 *= dragCompensation;
-        
-        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
-        finalVelocity.y = v0 * Mathf.Sin(angle);
-        
-        ballRb.velocity = finalVelocity;
-        animationController.PlayVolleyAnimation();
-        
-        CalculateLandingPoint(ball.transform.position, finalVelocity);
-        
-        UpdateBotColor();
-        
-        ball = null;
-        ballRb = null;
-        
-        if (autoReturnToDefault)
-        {
-            StartCoroutine(ReturnToDefaultAfterDelay());
-        }
-    }
-    
-    void UpdateBotColor()
-    {
-        if (botRenderer != null)
-        {
-            botRenderer.material.color = hasBall ? hasBallColor : normalColor;
+            // Bot için catch height kullan
+            BotController targetBotController = target.GetComponent<BotController>();
+            if (targetBotController != null)
+            {
+                return target.position + Vector3.up * targetBotController.catchHeight + new Vector3(0,0.1f,0);
+            }
+            else
+            {
+                return target.position + catchOffset;
+            }
         }
     }
     
@@ -735,7 +616,7 @@ public class BotController : MonoBehaviour
     
         if (activeCatcher != null)
         {
-            activeCatcher.StopMoving();
+            activeCatcher.ChangeState(new IdleState(activeCatcher));
         }
         activeCatcher = null;
     
@@ -764,16 +645,6 @@ public class BotController : MonoBehaviour
         
         Debug.Log($"Finding closest bot to landing point: {predictedLandingPoint}");
         Debug.Log($"Total bots available: {allBots.Length}");
-        
-        Debug.Log("=== BOT STATUS CHECK ===");
-        for (int j = 0; j < allBots.Length; j++)
-        {
-            if (allBots[j] != null)
-            {
-                Debug.Log($"Bot[{j}] {allBots[j].gameObject.name} - Team: {allBots[j].team}, CanCatch: {allBots[j].canCatchBall}, HasBall: {allBots[j].hasBall}");
-            }
-        }
-        Debug.Log("=======================");
         
         BotController closestBot = null;
         float closestDistance = float.MaxValue;
@@ -876,7 +747,10 @@ public class BotController : MonoBehaviour
         {
             if (closestDistance < 20f)
             {
-                closestBot.StartMovingToBall(predictedLandingPoint);
+                // MovingToBallState'e geç
+                MovingToBallState moveState = new MovingToBallState(closestBot);
+                moveState.SetTargetPosition(predictedLandingPoint);
+                closestBot.ChangeState(moveState);
                 activeCatcher = closestBot;
                 Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving! Distance: {closestDistance:F2}");
             }
@@ -918,7 +792,7 @@ public class BotController : MonoBehaviour
         return landingPoint;
     }
     
-    bool CanMoveToPosition(Vector3 targetPosition)
+    public bool CanMoveToPosition(Vector3 targetPosition)
     {
         if (team == Team.Red)
         {
@@ -973,242 +847,11 @@ public class BotController : MonoBehaviour
                Mathf.Abs(ballPosition.z) <= halfWidth;
     }
     
-    void StartMovingToBall(Vector3 targetPos)
-    {
-        if (!CanMoveToPosition(targetPos))
-        {
-            Debug.Log($"{gameObject.name} cannot move to {targetPos.x:F2} - net boundary violation!");
-            return;
-        }
-        
-        targetMovePosition = targetPos;
-        isMovingToBall = true;
-        isReturningToDefault = false;
-        Debug.Log($"{gameObject.name} started moving to position: {targetPos}");
-    }
-    
-    void StopMoving()
-    {
-        isMovingToBall = false;
-        if (activeCatcher == this)
-        {
-            activeCatcher = null;
-            Debug.Log($"{gameObject.name} stopped moving");
-        }
-        
-        // Animasyonu idle'a döndür
-        if (animationController != null)
-        {
-            animationController.PlayIdleAnimation();
-        }
-    }
-    
-    void MoveToTarget()
-    {
-        Vector3 direction = targetMovePosition - myTransform.position;
-        direction.y = 0;
-        
-        float distance = direction.magnitude;
-        
-        if (distance < stoppingDistance)
-        {
-            StopMoving();
-            return;
-        }
-        
-        float currentSpeed = distance > 3f ? runSpeed : moveSpeed;
-        Vector3 movement = direction.normalized * currentSpeed * Time.deltaTime;
-        
-        Vector3 newPosition = myTransform.position + movement;
-        
-        if (!CanMoveToPosition(newPosition))
-        {
-            if (courtManager != null)
-            {
-                float halfLength = courtManager.courtLength / 2f;
-                float halfWidth = courtManager.courtWidth / 2f;
-                
-                if (team == Team.Red)
-                {
-                    newPosition.x = Mathf.Min(newPosition.x, -netBoundary - 0.1f);
-                    newPosition.x = Mathf.Max(newPosition.x, -halfLength - outOfBoundsLimit);
-                }
-                else if (team == Team.Blue)
-                {
-                    newPosition.x = Mathf.Max(newPosition.x, netBoundary + 0.1f);
-                    newPosition.x = Mathf.Min(newPosition.x, halfLength + outOfBoundsLimit);
-                }
-                
-                newPosition.z = Mathf.Clamp(newPosition.z, -halfWidth - outOfBoundsLimit, halfWidth + outOfBoundsLimit);
-            }
-            
-            if (Vector3.Distance(myTransform.position, newPosition) < 0.01f)
-            {
-                StopMoving();
-                Debug.Log($"{gameObject.name} reached boundary, stopping movement");
-                return;
-            }
-        }
-        
-        myTransform.position = newPosition;
-        
-        if (direction != Vector3.zero)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
-            myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime * 2f);
-        }
-    }
-    
-    IEnumerator ReturnToDefaultAfterDelay()
-    {
-        yield return new WaitForSeconds(returnToDefaultDelay);
-        
-        if (!hasBall && !isMovingToBall)
-        {
-            isReturningToDefault = true;
-            Debug.Log($"{gameObject.name} returning to default position");
-        }
-    }
-    
-    void ReturnToDefaultPosition()
-    {
-        if (defaultPosition == null)
-        {
-            isReturningToDefault = false;
-            return;
-        }
-        
-        Vector3 direction = defaultPosition.position - myTransform.position;
-        direction.y = 0;
-        
-        float distance = direction.magnitude;
-        
-        if (distance < stoppingDistance)
-        {
-            isReturningToDefault = false;
-            myTransform.rotation = Quaternion.Slerp(myTransform.rotation, defaultPosition.rotation, rotationSpeed * Time.deltaTime);
-            Debug.Log($"{gameObject.name} reached default position");
-            return;
-        }
-        
-        Vector3 movement = direction.normalized * moveSpeed * Time.deltaTime;
-        myTransform.position += movement;
-        
-        if (direction != Vector3.zero)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
-            myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
-        }
-    }
-    
-    void InstantThrow()
-    {
-        if (activeCatcher == this)
-        {
-            StopMoving();
-        }
-        
-        targetBot = GetRandomTarget();
-        
-        if (targetBot == null || ball == null) return;
-        
-        bool isTargetVRPlayer = targetBot.CompareTag("Player");
-        
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            if (showTrajectory)
-                Debug.Log($"{gameObject.name} ({team}) topu havada yakaladı ve VR Player ({vrProxy.playerTeam})'e fırlatıyor!");
-        }
-        else
-        {
-            BotController targetController = targetBot.GetComponent<BotController>();
-            if (showTrajectory)
-                Debug.Log($"{gameObject.name} ({team}) topu havada yakaladı ve {targetBot.name} ({targetController.team})'e fırlatıyor!");
-        }
-        
-        hasBall = true;
-        UpdateBotColor();
-        
-        Vector3 currentBallPosition = ball.transform.position;
-        Vector3 targetPosition;
-        
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            targetPosition = vrProxy.GetTargetTransform().position + playerCatchOffset;
-        }
-        else
-        {
-            targetPosition = targetBot.position + catchOffset;
-        }
-        
-        Vector3 direction = targetPosition - currentBallPosition;
-        float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
-        
-        float gravity = Mathf.Abs(Physics.gravity.y);
-        float heightDifference = targetPosition.y - currentBallPosition.y;
-        float dragCompensation = 1f + (ballRb.drag * 0.2f * horizontalDistance / 10f);
-        float angle = 45f * Mathf.Deg2Rad;
-        
-        float v0 = Mathf.Sqrt((gravity * horizontalDistance * horizontalDistance) / 
-                             (2 * Mathf.Cos(angle) * Mathf.Cos(angle) * 
-                             (horizontalDistance * Mathf.Tan(angle) - heightDifference)));
-        
-        v0 *= dragCompensation;
-        
-        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
-        finalVelocity.y = v0 * Mathf.Sin(angle);
-        
-        ballRb.velocity = finalVelocity;
-        
-        for (int i = 0; i < allBots.Length; i++)
-        {
-            allBots[i].canCatchBall = false;
-            allBots[i].lastThrower = myTransform;
-        }
-        
-        canCatchBall = false;
-        catchCooldown = 0.5f;
-        
-        if (isTargetVRPlayer)
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            vrProxy.EnableCatching();
-        }
-        else
-        {
-            BotController targetController = targetBot.GetComponent<BotController>();
-            targetController.EnableCatching();
-        }
-        
-        CalculateLandingPoint(currentBallPosition, finalVelocity);
-        
-        hasBall = false;
-        StartCoroutine(ResetColorAfterDelay());
-        
-        ball = null;
-        ballRb = null;
-        
-        if (autoReturnToDefault)
-        {
-            StartCoroutine(ReturnToDefaultAfterDelay());
-        }
-    }
-    
-    IEnumerator ResetColorAfterDelay()
-    {
-        yield return colorResetDelay;
-        UpdateBotColor();
-    }
-    
     public void ForceReturnToDefault()
     {
         if (defaultPosition != null)
         {
-            isReturningToDefault = true;
-            isMovingToBall = false;
-            Debug.Log($"{gameObject.name} forced to return to default position");
+            ChangeState(new ReturningToPositionState(this));
         }
     }
     
@@ -1227,10 +870,103 @@ public class BotController : MonoBehaviour
         Debug.Log($"{gameObject.name} default position set to: {position}");
     }
     
+    Vector3 CalculatePositionAtTime(Vector3 startPosition, Vector3 velocity, float time)
+    {
+        return new Vector3(
+            startPosition.x + velocity.x * time,
+            startPosition.y + velocity.y * time + 0.5f * Physics.gravity.y * time * time,
+            startPosition.z + velocity.z * time
+        );
+    }
+    
+    public void StartWithBall(GameObject startBall, bool isServing = false)
+    {
+        ball = startBall;
+        ballRb = ball.GetComponent<Rigidbody>();
+        hasBall = true;
+        canCatchBall = true;
+        
+        cachedBall = ball;
+        cachedBallTransform = ball.transform;
+        cachedBallRb = ballRb;
+        
+        ball.transform.position = myTransform.position + catchOffset;
+        ball.transform.SetParent(myTransform);
+        
+        UpdateBotColorInternal();
+        
+        if (showTrajectory)
+            Debug.Log($"{gameObject.name} topu aldı ve {(isServing ? "servis atacak" : "hemen atıyor")}...");
+        
+        // Servis için özel hedefleme
+        if (isServing)
+        {
+            targetBot = GetOpponentTarget();
+        }
+        else
+        {
+            targetBot = GetRandomTarget();
+        }
+        
+        if (targetBot != null && ball != null)
+        {
+            // Direkt vuruş state'ine geç (servis için hazırlık yok)
+            ChangeState(new HittingState(this, targetBot, ball));
+        }
+    }
+    
+    // Debug için state bilgisi
+    public string GetCurrentStateName()
+    {
+        return currentStateName;
+    }
+    
     void OnDrawGizmosSelected()
     {
         if (!showTrajectory) return;
         
+        // State bilgisini göster
+        if (Application.isPlaying)
+        {
+            Gizmos.color = Color.cyan;
+            #if UNITY_EDITOR
+            UnityEditor.Handles.Label(transform.position + Vector3.up * 3f, $"State: {currentStateName}");
+            #endif
+        }
+        
+        // Yakalama alanını göster (silindir şeklinde)
+        Vector3 catchCenter = transform.position + Vector3.up * catchHeight;
+        
+        // Yatay yakalama alanı (daire)
+        Gizmos.color = new Color(0, 1, 0, 0.3f);
+        DrawCircle(catchCenter, catchRadius, 32);
+        
+        // Dikey yakalama alanı (silindir kenarları)
+        Gizmos.color = new Color(0, 1, 0, 0.5f);
+        Vector3 topCenter = catchCenter + Vector3.up * catchVerticalRange;
+        Vector3 bottomCenter = catchCenter - Vector3.up * catchVerticalRange;
+        
+        // Üst ve alt daireler
+        DrawCircle(topCenter, catchRadius, 32);
+        DrawCircle(bottomCenter, catchRadius, 32);
+        
+        // Dikey çizgiler
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * Mathf.PI * 2f / 8f;
+            Vector3 offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * catchRadius;
+            Gizmos.DrawLine(topCenter + offset, bottomCenter + offset);
+        }
+        
+        // Merkez noktası
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(catchCenter, 0.1f);
+        
+        // Detection radius (eskisi gibi)
+        Gizmos.color = new Color(1, 1, 0, 0.2f);
+        Gizmos.DrawWireSphere(catchCenter, detectionRadius);
+        
+        // Diğer debug gösterimleri aynı kalacak...
         if (team == Team.Red)
         {
             Gizmos.color = new Color(1f, 0f, 0f, 0.5f);
@@ -1277,12 +1013,6 @@ public class BotController : MonoBehaviour
             }
         }
         
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, detectionRadius);
-        
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(transform.position, catchRadius);
-        
         if (isMovingToBall)
         {
             bool canReach = CanMoveToPosition(targetMovePosition);
@@ -1315,6 +1045,21 @@ public class BotController : MonoBehaviour
         }
     }
     
+    // Yardımcı metod - daire çizme
+    void DrawCircle(Vector3 center, float radius, int segments)
+    {
+        float angleStep = 360f / segments;
+        Vector3 prevPoint = center + new Vector3(radius, 0, 0);
+        
+        for (int i = 1; i <= segments; i++)
+        {
+            float angle = i * angleStep * Mathf.Deg2Rad;
+            Vector3 newPoint = center + new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
+            Gizmos.DrawLine(prevPoint, newPoint);
+            prevPoint = newPoint;
+        }
+    }
+    
     void OnDrawGizmos()
     {
         if (!Application.isPlaying || !showTrajectory) return;
@@ -1344,7 +1089,7 @@ public class BotController : MonoBehaviour
         if (hasBall && ball != null && targetBot != null)
         {
             Vector3 startPos = ball.transform.position;
-            Vector3 targetPos = targetBot.position + catchOffset;
+            Vector3 targetPos = GetTargetPosition(targetBot);
             
             Vector3 direction = targetPos - startPos;
             float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
@@ -1360,6 +1105,11 @@ public class BotController : MonoBehaviour
             velocity.y = v0 * Mathf.Sin(angle);
             
             DrawTrajectory(startPos, velocity);
+            
+            // Hedef noktayı göster
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawWireSphere(targetPos, 0.3f);
+            Gizmos.DrawWireCube(targetPos, Vector3.one * 0.2f);
         }
     }
     
@@ -1378,91 +1128,44 @@ public class BotController : MonoBehaviour
             Gizmos.DrawLine(previousPoint, point);
             previousPoint = point;
             
-            if (targetBot != null && point.y <= targetBot.position.y + 1.5f && time > 0)
+            if (targetBot != null)
             {
-                Gizmos.color = Color.green;
-                Gizmos.DrawWireSphere(point, 0.2f);
-                break;
+                float targetHeight;
+                
+                // VR Player mı yoksa Bot mu kontrol et
+                if (targetBot.CompareTag("Player"))
+                {
+                    VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+                    if (vrProxy != null && vrProxy.GetTargetTransform() != null)
+                    {
+                        targetHeight = vrProxy.GetTargetTransform().position.y;
+                    }
+                    else
+                    {
+                        targetHeight = targetBot.position.y + 1.2f;
+                    }
+                }
+                else
+                {
+                    // Bot için catch height kullan
+                    BotController targetBotController = targetBot.GetComponent<BotController>();
+                    if (targetBotController != null)
+                    {
+                        targetHeight = targetBot.position.y + targetBotController.catchHeight;
+                    }
+                    else
+                    {
+                        targetHeight = targetBot.position.y + 1.5f;
+                    }
+                }
+                
+                if (point.y <= targetHeight && time > 0)
+                {
+                    Gizmos.color = Color.green;
+                    Gizmos.DrawWireSphere(point, 0.2f);
+                    break;
+                }
             }
-        }
-    }
-    
-    Vector3 CalculatePositionAtTime(Vector3 startPosition, Vector3 velocity, float time)
-    {
-        return new Vector3(
-            startPosition.x + velocity.x * time,
-            startPosition.y + velocity.y * time + 0.5f * Physics.gravity.y * time * time,
-            startPosition.z + velocity.z * time
-        );
-    }
-    
-    void CalculateLandingPoint(Vector3 startPosition, Vector3 velocity)
-    {
-        if (targetBot == null) return;
-        
-        float targetHeight;
-        
-        if (targetBot.CompareTag("Player"))
-        {
-            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
-            if (vrProxy != null && vrProxy.GetTargetTransform() != null)
-            {
-                targetHeight = vrProxy.GetTargetTransform().position.y;
-            }
-            else
-            {
-                targetHeight = targetBot.position.y + 1.2f;
-            }
-        }
-        else
-        {
-            targetHeight = targetBot.position.y + 1.5f;
-        }
-        
-        float a = 0.5f * Physics.gravity.y;
-        float b = velocity.y;
-        float c = startPosition.y - targetHeight;
-        
-        float discriminant = b * b - 4 * a * c;
-        if (discriminant >= 0)
-        {
-            float t1 = (-b - Mathf.Sqrt(discriminant)) / (2 * a);
-            float t2 = (-b + Mathf.Sqrt(discriminant)) / (2 * a);
-            float time = Mathf.Max(t1, t2);
-            
-            if (time > 0)
-            {
-                landingPoint = CalculatePositionAtTime(startPosition, velocity, time);
-            }
-        }
-    }
-    
-    public void StartWithBall(GameObject startBall, bool isServing = false)
-    {
-        ball = startBall;
-        ballRb = ball.GetComponent<Rigidbody>();
-        hasBall = true;
-        canCatchBall = true;
-        
-        cachedBall = ball;
-        cachedBallTransform = ball.transform;
-        cachedBallRb = ballRb;
-        
-        ball.transform.position = myTransform.position + catchOffset;
-        ball.transform.SetParent(myTransform);
-        
-        UpdateBotColor();
-        
-        if (showTrajectory)
-            Debug.Log($"{gameObject.name} topu aldı ve {(isServing ? "servis atacak" : "hemen atıyor")}...");
-        
-        if (isServing)
-        {
-            ThrowServiceToOpponent();
-        }
-        else
-        {
-            ThrowBallToTarget();
         }
     }
 }

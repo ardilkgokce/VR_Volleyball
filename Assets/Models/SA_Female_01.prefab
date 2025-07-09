@@ -283,6 +283,7 @@ Transform:
   m_Children:
   - {fileID: 5327886706901158235}
   - {fileID: 7458348009000487089}
+  - {fileID: 2250811585976268872}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!95 &734251221806223956
@@ -320,7 +321,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   team: 1
   detectionRadius: 5
-  catchRadius: 1.5
+  catchRadius: 0.5
+  catchHeight: 2
+  catchVerticalRange: 0.5
   throwForce: 15
   throwHeight: 5
   moveSpeed: 4
@@ -331,9 +334,15 @@ MonoBehaviour:
   netBoundary: 0.5
   outOfBoundsLimit: 2
   animationController: {fileID: 1037266632923213441}
-  defaultPosition: {fileID: 0}
+  hitPoint: {fileID: 2250811585976268872}
+  defaultPosition: {fileID: 2250811585976268872}
   returnToDefaultDelay: 0.7
   autoReturnToDefault: 1
+  targetBot: {fileID: 0}
+  ball: {fileID: 0}
+  ballRb: {fileID: 0}
+  hasBall: 0
+  catchCooldown: 0
   canCatchBall: 1
   lastThrower: {fileID: 0}
   normalColor: {r: 0, g: 0, b: 1, a: 1}
@@ -341,6 +350,9 @@ MonoBehaviour:
   rotationSpeed: 10
   showTrajectory: 1
   trajectoryPoints: 30
+  isMovingToBall: 0
+  isReturningToDefault: 0
+  isPerformingVolley: 0
 --- !u!114 &1037266632923213441
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -898,6 +910,37 @@ Transform:
   m_Children:
   - {fileID: 8014323072999600985}
   m_Father: {fileID: 463445343782992122}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2021903324473030837
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2250811585976268872}
+  m_Layer: 0
+  m_Name: FixedHitPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2250811585976268872
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2021903324473030837}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.931, z: 0.29299998}
+  m_LocalScale: {x: 0.83333325, y: 0.83333325, z: 0.83333325}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 103614649300400523}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2211787382877142069
 GameObject:

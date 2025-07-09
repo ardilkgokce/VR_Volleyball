@@ -904,6 +904,37 @@ Transform:
   - {fileID: 3595246193388658121}
   m_Father: {fileID: 1922871741097581998}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1511748499153509929
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6638316584279996379}
+  m_Layer: 0
+  m_Name: FixedHitPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6638316584279996379
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1511748499153509929}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.931, z: 0.293}
+  m_LocalScale: {x: 0.83333325, y: 0.83333325, z: 0.83333325}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7527103090280110943}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1533961412100211062
 GameObject:
   m_ObjectHideFlags: 0
@@ -2903,6 +2934,7 @@ Transform:
   m_Children:
   - {fileID: 2375028831060306831}
   - {fileID: 1046215445729831525}
+  - {fileID: 6638316584279996379}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!95 &5278937037183301543
@@ -2940,7 +2972,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   team: 1
   detectionRadius: 5
-  catchRadius: 1.5
+  catchRadius: 0.5
+  catchHeight: 2
+  catchVerticalRange: 0.5
   throwForce: 15
   throwHeight: 5
   moveSpeed: 4
@@ -2951,9 +2985,15 @@ MonoBehaviour:
   netBoundary: 0.5
   outOfBoundsLimit: 2
   animationController: {fileID: 2113383198134302141}
+  hitPoint: {fileID: 0}
   defaultPosition: {fileID: 0}
   returnToDefaultDelay: 0.7
   autoReturnToDefault: 1
+  targetBot: {fileID: 0}
+  ball: {fileID: 0}
+  ballRb: {fileID: 0}
+  hasBall: 0
+  catchCooldown: 0
   canCatchBall: 1
   lastThrower: {fileID: 0}
   normalColor: {r: 0, g: 0, b: 1, a: 1}
@@ -2961,6 +3001,9 @@ MonoBehaviour:
   rotationSpeed: 10
   showTrajectory: 1
   trajectoryPoints: 30
+  isMovingToBall: 0
+  isReturningToDefault: 0
+  isPerformingVolley: 0
 --- !u!114 &2113383198134302141
 MonoBehaviour:
   m_ObjectHideFlags: 0
