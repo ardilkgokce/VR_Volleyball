@@ -2958,7 +2958,7 @@ MonoBehaviour:
   lastThrower: {fileID: 0}
   normalColor: {r: 0, g: 0, b: 1, a: 1}
   hasBallColor: {r: 0, g: 1, b: 0, a: 1}
-  rotationSpeed: 5
+  rotationSpeed: 10
   showTrajectory: 1
   trajectoryPoints: 30
 --- !u!114 &2113383198134302141

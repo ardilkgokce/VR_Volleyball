@@ -152,7 +152,6 @@ public class BotAnimationController : MonoBehaviour
     /// </summary>
     public void LookAt(Vector3 targetPosition, float rotationSpeed)
     {
-        if (isPerformingVolley) return; // Vuruş sırasında dönme
         
         Vector3 direction = targetPosition - transform.position;
         direction.y = 0;

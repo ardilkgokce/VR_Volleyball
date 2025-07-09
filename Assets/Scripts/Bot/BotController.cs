@@ -52,7 +52,7 @@ public class BotController : MonoBehaviour
     public Color normalColor = Color.blue;
     public Color hasBallColor = Color.green;
     private Renderer botRenderer;
-    public float rotationSpeed = 5f;
+    public float rotationSpeed = 10f;
     
     [Header("Debug")]
     public bool showTrajectory = true;
