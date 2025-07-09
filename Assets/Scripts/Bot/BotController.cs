@@ -27,8 +27,11 @@ public class BotController : MonoBehaviour
     public float stoppingDistance = 0.5f;
     public bool enableMovement = true;
     public float maxMoveDistance = 20f;
-    public float netBoundary = 0.5f; // File sınırı mesafesi
-    public float outOfBoundsLimit = 2f; // Saha dışına çıkma limiti
+    public float netBoundary = 0.5f;
+    public float outOfBoundsLimit = 2f;
+    
+    [Header("Animation Settings")]
+    public BotAnimationController animationController;
     
     [Header("Default Position")]
     public Transform defaultPosition;
@@ -85,11 +88,30 @@ public class BotController : MonoBehaviour
     private Collider[] nearbyColliders = new Collider[10];
     private int colliderCount;
     
+    // Animation states
+    private float currentMoveSpeed = 0f;
+    private bool isPerformingVolley = false;
+    
     void Awake()
     {
         myTransform = transform;
         botRenderer = GetComponent<Renderer>();
         colorResetDelay = new WaitForSeconds(0.1f);
+        
+        // Animation Controller'ı bul
+        if (animationController == null)
+        {
+            animationController = GetComponent<BotAnimationController>();
+            if (animationController == null)
+            {
+                animationController = GetComponentInChildren<BotAnimationController>();
+            }
+        }
+        
+        if (animationController == null)
+        {
+            Debug.LogWarning($"{gameObject.name}: BotAnimationController component not found! Animations will not work.");
+        }
         
         if (defaultPosition == null)
         {
@@ -150,9 +172,12 @@ public class BotController : MonoBehaviour
         {
             catchCooldown -= Time.deltaTime;
         }
+        
+        // Animasyon güncellemeleri
+        UpdateAnimations();
     }
 
-    private void FixedUpdate()
+    void FixedUpdate()
     {
         if (!hasBall && canCatchBall && catchCooldown <= 0)
         {
@@ -172,6 +197,38 @@ public class BotController : MonoBehaviour
                 MoveToTarget();
             }
         }
+    }
+    
+    void UpdateAnimations()
+    {
+        if (animationController == null) return;
+        
+        // Hareket durumunu kontrol et
+        bool isMoving = isMovingToBall || isReturningToDefault;
+        
+        if (isMoving)
+        {
+            Vector3 direction = targetMovePosition - myTransform.position;
+            float distance = direction.magnitude;
+            
+            // Mesafeye göre hız ayarla
+            if (distance > 3f)
+            {
+                currentMoveSpeed = runSpeed;
+            }
+            else
+            {
+                currentMoveSpeed = moveSpeed;
+            }
+        }
+        else
+        {
+            // Yavaşça sıfıra düş
+            currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, 0f, Time.deltaTime * 5f);
+        }
+        
+        // Animation controller'a güncellemeyi gönder
+        animationController.UpdateMovementAnimation(currentMoveSpeed, isMoving);
     }
 
     void CheckForBall()
@@ -228,6 +285,11 @@ public class BotController : MonoBehaviour
                                         StopMoving();
                                     }
                                     
+                                    // Voleybol animasyonunu tetikle ve hemen topu fırlat
+                                    if (animationController != null)
+                                    {
+                                        animationController.PlayVolleyAnimation();
+                                    }
                                     InstantThrow();
                                 }
                                 else
@@ -241,6 +303,11 @@ public class BotController : MonoBehaviour
                                 {
                                     StopMoving();
                                 }
+                                
+                                if (animationController != null)
+                                {
+                                    animationController.PlayVolleyAnimation();
+                                }
                                 InstantThrow();
                             }
                             
@@ -251,6 +318,8 @@ public class BotController : MonoBehaviour
             }
         }
     }
+    
+
     
     void TrackBall()
     {
@@ -286,13 +355,21 @@ public class BotController : MonoBehaviour
     
     void LookAtTarget(Vector3 targetPosition)
     {
-        Vector3 direction = targetPosition - myTransform.position;
-        direction.y = 0;
-        
-        if (direction != Vector3.zero)
+        if (animationController != null)
         {
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
-            myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            animationController.LookAt(targetPosition, rotationSpeed);
+        }
+        else
+        {
+            // Fallback - animasyon controller yoksa eski yöntem
+            Vector3 direction = targetPosition - myTransform.position;
+            direction.y = 0;
+            
+            if (direction != Vector3.zero)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(direction);
+                myTransform.rotation = Quaternion.Slerp(myTransform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            }
         }
     }
     
@@ -386,7 +463,6 @@ public class BotController : MonoBehaviour
         return null;
     }
     
-    // Karşı takımdan hedef seç (servis için)
     Transform GetOpponentTarget()
     {
         validTargets.Clear();
@@ -534,7 +610,6 @@ public class BotController : MonoBehaviour
         }
     }
     
-    // Servisi karşı takıma at
     void ThrowServiceToOpponent()
     {
         targetBot = GetOpponentTarget();
@@ -645,9 +720,8 @@ public class BotController : MonoBehaviour
     
     public static void OnVRPlayerHitBall(Vector3 ballPosition, Vector3 ballVelocity)
     {
-        // VR Player'ın takımını bul
         GameObject vrPlayer = GameObject.FindWithTag("Player");
-        Team vrTeam = Team.Blue; // varsayılan
+        Team vrTeam = Team.Blue;
     
         if (vrPlayer != null)
         {
@@ -673,159 +747,148 @@ public class BotController : MonoBehaviour
         FindAndActivateClosestBot();
     }
     
-static void FindAndActivateClosestBot()
-{
-    if (allBots == null || allBots.Length == 0)
+    static void FindAndActivateClosestBot()
     {
-        allBots = FindObjectsOfType<BotController>();
-        Debug.LogWarning($"Bot list was empty, refetched: {allBots.Length} bots found");
-    }
-    
-    if (!isPredictionValid || allBots == null || allBots.Length == 0)
-    {
-        Debug.LogError("Cannot find closest bot - no valid bots or prediction!");
-        return;
-    }
-    
-    Debug.Log($"Finding closest bot to landing point: {predictedLandingPoint}");
-    Debug.Log($"Total bots available: {allBots.Length}");
-    
-    // DEBUG: Tüm botların durumunu kontrol et
-    Debug.Log("=== BOT STATUS CHECK ===");
-    for (int j = 0; j < allBots.Length; j++)
-    {
-        if (allBots[j] != null)
+        if (allBots == null || allBots.Length == 0)
         {
-            Debug.Log($"Bot[{j}] {allBots[j].gameObject.name} - Team: {allBots[j].team}, CanCatch: {allBots[j].canCatchBall}, HasBall: {allBots[j].hasBall}");
+            allBots = FindObjectsOfType<BotController>();
+            Debug.LogWarning($"Bot list was empty, refetched: {allBots.Length} bots found");
         }
-    }
-    Debug.Log("=======================");
-    
-    BotController closestBot = null;
-    float closestDistance = float.MaxValue;
-    int validBotCount = 0;
-    int boundaryViolationCount = 0;
-    int wrongCourtCount = 0;
-    int cannotCatchCount = 0; // Yeni sayaç
-    
-    for (int i = 0; i < allBots.Length; i++)
-    {
-        BotController bot = allBots[i];
-        if (bot != null)
+        
+        if (!isPredictionValid || allBots == null || allBots.Length == 0)
         {
-            // Önce canCatchBall kontrolü
-            if (!bot.canCatchBall)
+            Debug.LogError("Cannot find closest bot - no valid bots or prediction!");
+            return;
+        }
+        
+        Debug.Log($"Finding closest bot to landing point: {predictedLandingPoint}");
+        Debug.Log($"Total bots available: {allBots.Length}");
+        
+        Debug.Log("=== BOT STATUS CHECK ===");
+        for (int j = 0; j < allBots.Length; j++)
+        {
+            if (allBots[j] != null)
             {
-                cannotCatchCount++;
-                Debug.Log($"Bot[{i}] {bot.gameObject.name} - CanCatchBall is FALSE!");
-                continue;
+                Debug.Log($"Bot[{j}] {allBots[j].gameObject.name} - Team: {allBots[j].team}, CanCatch: {allBots[j].canCatchBall}, HasBall: {allBots[j].hasBall}");
             }
-            
-            // File sınırı kontrolü
-            if (!bot.CanMoveToPosition(predictedLandingPoint))
+        }
+        Debug.Log("=======================");
+        
+        BotController closestBot = null;
+        float closestDistance = float.MaxValue;
+        int validBotCount = 0;
+        int boundaryViolationCount = 0;
+        int wrongCourtCount = 0;
+        int cannotCatchCount = 0;
+        
+        for (int i = 0; i < allBots.Length; i++)
+        {
+            BotController bot = allBots[i];
+            if (bot != null)
             {
-                boundaryViolationCount++;
-                Debug.Log($"Bot[{i}] {bot.gameObject.name} cannot reach landing point due to boundary violation");
-                continue;
-            }
-            
-            // SADECE Red takım için saha dışı kontrolü yap
-            if (bot.team == Team.Red)
-            {
-                if (!bot.IsBallInOurCourt(predictedLandingPoint))
+                if (!bot.canCatchBall)
                 {
-                    wrongCourtCount++;
-                    Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball will land in opponent court");
+                    cannotCatchCount++;
+                    Debug.Log($"Bot[{i}] {bot.gameObject.name} - CanCatchBall is FALSE!");
                     continue;
                 }
                 
-                // Top bizim sahamızda ama dışarı düşüyorsa ve karşıdan geliyorsa gitmesin
-                if (!bot.IsBallInBounds(predictedLandingPoint))
+                if (!bot.CanMoveToPosition(predictedLandingPoint))
                 {
-                    // VR Player veya karşı takımdan mı geliyor kontrol et
-                    bool isFromOpponent = false;
-                    
-                    // Son vuran VR Player mı?
-                    GameObject vrPlayer = GameObject.FindWithTag("Player");
-                    if (vrPlayer != null)
+                    boundaryViolationCount++;
+                    Debug.Log($"Bot[{i}] {bot.gameObject.name} cannot reach landing point due to boundary violation");
+                    continue;
+                }
+                
+                if (bot.team == Team.Red)
+                {
+                    if (!bot.IsBallInOurCourt(predictedLandingPoint))
                     {
-                        VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
-                        if (vrProxy != null && vrProxy.playerTeam != bot.team)
-                        {
-                            isFromOpponent = true;
-                        }
+                        wrongCourtCount++;
+                        Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball will land in opponent court");
+                        continue;
                     }
                     
-                    // Son vuran karşı takım botu mu?
-                    if (!isFromOpponent && cachedBall != null)
+                    if (!bot.IsBallInBounds(predictedLandingPoint))
                     {
-                        VolleyballBall vbBall = cachedBall.GetComponent<VolleyballBall>();
-                        if (vbBall != null && vbBall.currentTeam != bot.team)
+                        bool isFromOpponent = false;
+                        
+                        GameObject vrPlayer = GameObject.FindWithTag("Player");
+                        if (vrPlayer != null)
                         {
-                            isFromOpponent = true;
+                            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+                            if (vrProxy != null && vrProxy.playerTeam != bot.team)
+                            {
+                                isFromOpponent = true;
+                            }
+                        }
+                        
+                        if (!isFromOpponent && cachedBall != null)
+                        {
+                            VolleyballBall vbBall = cachedBall.GetComponent<VolleyballBall>();
+                            if (vbBall != null && vbBall.currentTeam != bot.team)
+                            {
+                                isFromOpponent = true;
+                            }
+                        }
+                        
+                        if (isFromOpponent)
+                        {
+                            Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball from opponent going out, not chasing");
+                            continue;
                         }
                     }
-                    
-                    if (isFromOpponent)
+                }
+                else if (bot.team == Team.Blue)
+                {
+                    if (predictedLandingPoint.x < 0)
                     {
-                        Debug.Log($"Bot[{i}] {bot.gameObject.name} - ball from opponent going out, not chasing");
+                        wrongCourtCount++;
+                        Debug.Log($"Blue bot {bot.gameObject.name} - ball will land in Red court");
                         continue;
                     }
                 }
-            }
-            // Blue takım için alternatif çözüm uygulandı
-            else if (bot.team == Team.Blue)
-            {
-                // Blue takım için sadece karşı sahaya düşme kontrolü
-                if (predictedLandingPoint.x < 0) // Red sahaya düşüyorsa
+                
+                float distance = Vector3.Distance(bot.transform.position, predictedLandingPoint);
+                
+                Debug.Log($"Bot[{i}] {bot.gameObject.name} - Team: {bot.team}, CanCatch: {bot.canCatchBall}, HasBall: {bot.hasBall}, Distance: {distance:F2}");
+                
+                if (bot.canCatchBall && !bot.hasBall)
                 {
-                    wrongCourtCount++;
-                    Debug.Log($"Blue bot {bot.gameObject.name} - ball will land in Red court");
-                    continue;
+                    validBotCount++;
+                    if (distance < closestDistance)
+                    {
+                        closestDistance = distance;
+                        closestBot = bot;
+                    }
                 }
-                // Saha dışı kontrolü YOK - Blue takım her yere gider
             }
-            
-            float distance = Vector3.Distance(bot.transform.position, predictedLandingPoint);
-            
-            Debug.Log($"Bot[{i}] {bot.gameObject.name} - Team: {bot.team}, CanCatch: {bot.canCatchBall}, HasBall: {bot.hasBall}, Distance: {distance:F2}");
-            
-            if (bot.canCatchBall && !bot.hasBall)
+            else
             {
-                validBotCount++;
-                if (distance < closestDistance)
-                {
-                    closestDistance = distance;
-                    closestBot = bot;
-                }
+                Debug.LogWarning($"Bot[{i}] is null!");
+            }
+        }
+        
+        Debug.Log($"Summary - Valid: {validBotCount}, Cannot catch: {cannotCatchCount}, Boundary violations: {boundaryViolationCount}, Wrong court: {wrongCourtCount}");
+        
+        if (closestBot != null)
+        {
+            if (closestDistance < 20f)
+            {
+                closestBot.StartMovingToBall(predictedLandingPoint);
+                activeCatcher = closestBot;
+                Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving! Distance: {closestDistance:F2}");
+            }
+            else
+            {
+                Debug.LogWarning($"Closest bot {closestBot.gameObject.name} is too far: {closestDistance:F2}");
             }
         }
         else
         {
-            Debug.LogWarning($"Bot[{i}] is null!");
+            Debug.LogError($"No valid bot found! Total: {allBots.Length}, Valid: {validBotCount}");
         }
     }
-    
-    Debug.Log($"Summary - Valid: {validBotCount}, Cannot catch: {cannotCatchCount}, Boundary violations: {boundaryViolationCount}, Wrong court: {wrongCourtCount}");
-    
-    if (closestBot != null)
-    {
-        if (closestDistance < 20f)
-        {
-            closestBot.StartMovingToBall(predictedLandingPoint);
-            activeCatcher = closestBot;
-            Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving! Distance: {closestDistance:F2}");
-        }
-        else
-        {
-            Debug.LogWarning($"Closest bot {closestBot.gameObject.name} is too far: {closestDistance:F2}");
-        }
-    }
-    else
-    {
-        Debug.LogError($"No valid bot found! Total: {allBots.Length}, Valid: {validBotCount}");
-    }
-}
     
     static Vector3 PredictBallLandingPoint(Vector3 startPos, Vector3 velocity)
     {
@@ -854,10 +917,8 @@ static void FindAndActivateClosestBot()
         return landingPoint;
     }
     
-    // Pozisyon kontrolü - file sınırı ve saha dışı kontrolü
     bool CanMoveToPosition(Vector3 targetPosition)
     {
-        // File sınırı kontrolü
         if (team == Team.Red)
         {
             if (targetPosition.x > -netBoundary)
@@ -867,20 +928,17 @@ static void FindAndActivateClosestBot()
             }
         }
     
-        // Saha dışı kontrolü - SADECE RED TAKIM İÇİN
         if (team == Team.Red && courtManager != null)
         {
             float halfLength = courtManager.courtLength / 2f;
             float halfWidth = courtManager.courtWidth / 2f;
         
-            // Z ekseni (yan çizgiler) kontrolü
             if (Mathf.Abs(targetPosition.z) > halfWidth + outOfBoundsLimit)
             {
                 Debug.LogWarning($"Red team bot {gameObject.name} cannot move too far out of bounds! Target Z: {targetPosition.z:F2}");
                 return false;
             }
         
-            // X ekseni (arka çizgi) kontrolü
             if (targetPosition.x < -halfLength - outOfBoundsLimit)
             {
                 Debug.LogWarning($"Red team bot {gameObject.name} cannot move too far behind court! Target X: {targetPosition.x:F2}");
@@ -888,28 +946,24 @@ static void FindAndActivateClosestBot()
             }
         }
     
-        // Blue takım için saha dışı kontrolü YOK - istedikleri yere gidebilirler (file hariç)
-    
         return true;
     }
     
-    // Top kendi sahamızda mı kontrolü
     bool IsBallInOurCourt(Vector3 ballPosition)
     {
         if (team == Team.Red)
         {
-            return ballPosition.x < 0; // Red takım X < 0 bölgesinde
+            return ballPosition.x < 0;
         }
         else
         {
-            return ballPosition.x > 0; // Blue takım X > 0 bölgesinde
+            return ballPosition.x > 0;
         }
     }
     
-    // Top saha içinde mi kontrolü
     bool IsBallInBounds(Vector3 ballPosition)
     {
-        if (courtManager == null) return true; // Court manager yoksa varsayılan olarak saha içinde say
+        if (courtManager == null) return true;
         
         float halfLength = courtManager.courtLength / 2f;
         float halfWidth = courtManager.courtWidth / 2f;
@@ -920,7 +974,6 @@ static void FindAndActivateClosestBot()
     
     void StartMovingToBall(Vector3 targetPos)
     {
-        // File sınırı kontrolü
         if (!CanMoveToPosition(targetPos))
         {
             Debug.Log($"{gameObject.name} cannot move to {targetPos.x:F2} - net boundary violation!");
@@ -941,6 +994,12 @@ static void FindAndActivateClosestBot()
             activeCatcher = null;
             Debug.Log($"{gameObject.name} stopped moving");
         }
+        
+        // Animasyonu idle'a döndür
+        if (animationController != null)
+        {
+            animationController.PlayIdleAnimation();
+        }
     }
     
     void MoveToTarget()
@@ -959,37 +1018,29 @@ static void FindAndActivateClosestBot()
         float currentSpeed = distance > 3f ? runSpeed : moveSpeed;
         Vector3 movement = direction.normalized * currentSpeed * Time.deltaTime;
         
-        // Yeni pozisyonu hesapla
         Vector3 newPosition = myTransform.position + movement;
         
-        // File sınırı ve saha dışı kontrolü
         if (!CanMoveToPosition(newPosition))
         {
-            // Sınırlara göre pozisyonu ayarla
             if (courtManager != null)
             {
                 float halfLength = courtManager.courtLength / 2f;
                 float halfWidth = courtManager.courtWidth / 2f;
                 
-                // File sınırı
                 if (team == Team.Red)
                 {
                     newPosition.x = Mathf.Min(newPosition.x, -netBoundary - 0.1f);
-                    // Arka çizgi sınırı
                     newPosition.x = Mathf.Max(newPosition.x, -halfLength - outOfBoundsLimit);
                 }
                 else if (team == Team.Blue)
                 {
                     newPosition.x = Mathf.Max(newPosition.x, netBoundary + 0.1f);
-                    // Arka çizgi sınırı
                     newPosition.x = Mathf.Min(newPosition.x, halfLength + outOfBoundsLimit);
                 }
                 
-                // Yan çizgi sınırları
                 newPosition.z = Mathf.Clamp(newPosition.z, -halfWidth - outOfBoundsLimit, halfWidth + outOfBoundsLimit);
             }
             
-            // Eğer hareket edemiyorsak dur
             if (Vector3.Distance(myTransform.position, newPosition) < 0.01f)
             {
                 StopMoving();
@@ -998,10 +1049,8 @@ static void FindAndActivateClosestBot()
             }
         }
         
-        // Pozisyonu güncelle
         myTransform.position = newPosition;
         
-        // Hedefe bak
         if (direction != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(direction);
@@ -1181,7 +1230,6 @@ static void FindAndActivateClosestBot()
     {
         if (!showTrajectory) return;
         
-        // File sınırı çizgisi
         if (team == Team.Red)
         {
             Gizmos.color = new Color(1f, 0f, 0f, 0.5f);
@@ -1197,37 +1245,31 @@ static void FindAndActivateClosestBot()
             Gizmos.DrawLine(new Vector3(netBoundary, 3, -10), new Vector3(netBoundary, 3, 10));
         }
         
-        // Saha sınırları + hareket limiti
         if (courtManager != null)
         {
             float halfLength = courtManager.courtLength / 2f;
             float halfWidth = courtManager.courtWidth / 2f;
             
-            // Hareket edilebilir alan
             Gizmos.color = new Color(0.5f, 1f, 0.5f, 0.3f);
             
             if (team == Team.Red)
             {
-                // Red takım hareket alanı
                 Vector3 center = new Vector3((-halfLength - netBoundary) / 2f - 0.5f, 0.1f, 0);
                 Vector3 size = new Vector3(halfLength - netBoundary + outOfBoundsLimit, 0.1f, 
                                          (halfWidth + outOfBoundsLimit) * 2f);
                 Gizmos.DrawCube(center, size);
                 
-                // Sınır çizgileri
                 Gizmos.color = Color.red;
                 Gizmos.DrawLine(new Vector3(-halfLength - outOfBoundsLimit, 0, -halfWidth - outOfBoundsLimit), 
                               new Vector3(-halfLength - outOfBoundsLimit, 0, halfWidth + outOfBoundsLimit));
             }
             else
             {
-                // Blue takım hareket alanı
                 Vector3 center = new Vector3((halfLength + netBoundary) / 2f + 0.5f, 0.1f, 0);
                 Vector3 size = new Vector3(halfLength - netBoundary + outOfBoundsLimit, 0.1f, 
                                          (halfWidth + outOfBoundsLimit) * 2f);
                 Gizmos.DrawCube(center, size);
                 
-                // Sınır çizgileri
                 Gizmos.color = Color.blue;
                 Gizmos.DrawLine(new Vector3(halfLength + outOfBoundsLimit, 0, -halfWidth - outOfBoundsLimit), 
                               new Vector3(halfLength + outOfBoundsLimit, 0, halfWidth + outOfBoundsLimit));

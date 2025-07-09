@@ -16,6 +16,10 @@ public class GameManager : MonoBehaviour
     public Transform[] blueTeamPositions;
     public Transform[] redTeamPositions;
     
+    [Header("Bot Spawn Settings")]
+    [Tooltip("Y pozisyonu offset'i - botların ayaklarının yere değmesi için")]
+    public float botGroundOffset = 0.07096839f;
+    
     [Header("VR Player")]
     public Transform vrPlayerPosition;
     public GameObject vrPlayerPrefab;
@@ -568,37 +572,53 @@ public class GameManager : MonoBehaviour
         bots = new GameObject[totalBots];
         int botIndex = 0;
         
+        // Blue takım botlarını oluştur
         for (int i = 0; i < blueCount; i++)
         {
             if (blueTeamPositions[i] != null)
             {
                 Vector3 position = blueTeamPositions[i].position;
+                // Y pozisyonunu düzelt - ayaklar yere değsin
+                position.y = botGroundOffset;
                 
-                bots[botIndex] = Instantiate(botPrefab, position, Quaternion.identity);
+                bots[botIndex] = Instantiate(botPrefab, position, blueTeamPositions[i].rotation);
                 bots[botIndex].name = $"BlueBot{i + 1}";
                 bots[botIndex].tag = "Bot";
                 
                 BotController controller = bots[botIndex].GetComponent<BotController>();
                 controller.team = Team.Blue;
                 
+                // Default pozisyonu ayarla
+                controller.SetDefaultPosition(position, blueTeamPositions[i].rotation);
+                
                 botIndex++;
+                
+                Debug.Log($"Created {bots[botIndex-1].name} at position Y: {position.y}");
             }
         }
         
+        // Red takım botlarını oluştur
         for (int i = 0; i < redCount; i++)
         {
             if (redTeamPositions[i] != null)
             {
                 Vector3 position = redTeamPositions[i].position;
+                // Y pozisyonunu düzelt - ayaklar yere değsin
+                position.y = botGroundOffset;
                 
-                bots[botIndex] = Instantiate(botPrefab, position, Quaternion.identity);
+                bots[botIndex] = Instantiate(botPrefab, position, redTeamPositions[i].rotation);
                 bots[botIndex].name = $"RedBot{i + 1}";
                 bots[botIndex].tag = "Bot";
                 
                 BotController controller = bots[botIndex].GetComponent<BotController>();
                 controller.team = Team.Red;
                 
+                // Default pozisyonu ayarla
+                controller.SetDefaultPosition(position, redTeamPositions[i].rotation);
+                
                 botIndex++;
+                
+                Debug.Log($"Created {bots[botIndex-1].name} at position Y: {position.y}");
             }
         }
         
