@@ -20,6 +20,7 @@ public class BotController : MonoBehaviour
     public float catchRadius = 1.5f;
     public float catchHeight = 1.5f; // Yakalama alanının yerden yüksekliği
     public float catchVerticalRange = 1f; // Yakalama alanının dikey genişliği
+    public float hitPointTriggerDistance = 0.5f; // HitPoint'e yakınlık mesafesi
     public float throwForce = 10f;
     public float throwHeight = 5f;
     
@@ -235,6 +236,9 @@ public class BotController : MonoBehaviour
             Debug.Log($"{gameObject.name} - CanCatch: {canCatchBall}, Cooldown: {catchCooldown:F2}");
         }
         
+        // HitPoint pozisyonu (eğer varsa)
+        Vector3 hitPointPos = hitPoint != null ? hitPoint.position : myTransform.position + Vector3.up * catchHeight;
+        
         // Yakalama merkezi pozisyonu (yerden catchHeight kadar yukarıda)
         Vector3 catchCenter = myTransform.position + Vector3.up * catchHeight;
         
@@ -257,6 +261,9 @@ public class BotController : MonoBehaviour
                     float ballSpeed = cachedBallRb.velocity.magnitude;
                     Vector3 ballPos = cachedBallTransform.position;
                     
+                    // HitPoint'e olan mesafe kontrolü
+                    float distanceToHitPoint = Vector3.Distance(ballPos, hitPointPos);
+                    
                     // Yatay mesafe kontrolü
                     Vector3 horizontalDiff = ballPos - myTransform.position;
                     horizontalDiff.y = 0;
@@ -269,20 +276,35 @@ public class BotController : MonoBehaviour
                     
                     bool isInVerticalRange = ballHeight >= minCatchHeight && ballHeight <= maxCatchHeight;
                     bool isInHorizontalRange = horizontalDistance < catchRadius;
+                    bool isNearHitPoint = distanceToHitPoint < hitPointTriggerDistance;
                     
                     if (showTrajectory && Time.frameCount % 30 == 0)
                     {
-                        Debug.Log($"{gameObject.name} - Ball: Speed={ballSpeed:F2}, HorizDist={horizontalDistance:F2}, Height={ballHeight:F2}, InRange={isInHorizontalRange && isInVerticalRange}");
+                        Debug.Log($"{gameObject.name} - Ball: Speed={ballSpeed:F2}, HorizDist={horizontalDistance:F2}, Height={ballHeight:F2}, HitPointDist={distanceToHitPoint:F2}");
                     }
                     
-                    if (ballSpeed > 0.5f && isInHorizontalRange && isInVerticalRange)
+                    if (ballSpeed > 0.5f)
                     {
                         Vector3 ballVelocity = cachedBallRb.velocity;
                         Vector3 toBall = ballPos - myTransform.position;
                         
                         float dotProduct = Vector3.Dot(ballVelocity.normalized, -toBall.normalized);
                         
-                        if (dotProduct > 0.3f)
+                        // Sadece animasyon başlatma kontrolü
+                        if (isNearHitPoint && dotProduct > 0.1f && !isPerformingVolley)
+                        {
+                            // Sadece animasyonu başlat, yakalama yapma
+                            if (animationController != null)
+                            {
+                                animationController.PlayVolleyAnimation();
+                                isPerformingVolley = true;
+                                if (showTrajectory)
+                                    Debug.Log($"{gameObject.name} - Ball near HitPoint! Starting animation early.");
+                            }
+                        }
+                        
+                        // Normal yakalama kontrolü (eskisi gibi)
+                        if (dotProduct > 0.3f && isInHorizontalRange && isInVerticalRange)
                         {
                             ball = cachedBall;
                             ballRb = cachedBallRb;
@@ -388,11 +410,15 @@ public class BotController : MonoBehaviour
         }
         else
         {
-            // Bot için catch height kullan
+            // Bot için hitPoint yüksekliğini kullan
             BotController targetBotController = targetBot.GetComponent<BotController>();
-            if (targetBotController != null)
+            if (targetBotController != null && targetBotController.hitPoint != null)
             {
-                targetHeight = targetBot.position.y + targetBotController.catchHeight + 0.1f;
+                targetHeight = targetBotController.hitPoint.position.y;
+            }
+            else if (targetBotController != null)
+            {
+                targetHeight = targetBot.position.y + targetBotController.catchHeight;
             }
             else
             {
@@ -580,11 +606,17 @@ public class BotController : MonoBehaviour
         }
         else
         {
-            // Bot için catch height kullan
+            // Bot için hitPoint kullan
             BotController targetBotController = target.GetComponent<BotController>();
-            if (targetBotController != null)
+            if (targetBotController != null && targetBotController.hitPoint != null)
             {
-                return target.position + Vector3.up * targetBotController.catchHeight + new Vector3(0,0.1f,0);
+                return targetBotController.hitPoint.position;
+            }
+            else if (targetBotController != null)
+            {
+                // HitPoint yoksa fallback olarak catchHeight kullan
+                Debug.LogWarning($"{target.name} has no hitPoint assigned! Using catchHeight as fallback.");
+                return target.position + Vector3.up * targetBotController.catchHeight;
             }
             else
             {
@@ -665,7 +697,14 @@ public class BotController : MonoBehaviour
                     continue;
                 }
                 
-                if (!bot.CanMoveToPosition(predictedLandingPoint))
+                // Bot'un yakalama pozisyonunu hesapla
+                Vector3 botCatchPosition = new Vector3(
+                    predictedLandingPoint.x,
+                    bot.transform.position.y, // Y'yi değiştirme
+                    predictedLandingPoint.z
+                );
+                
+                if (!bot.CanMoveToPosition(botCatchPosition))
                 {
                     boundaryViolationCount++;
                     Debug.Log($"Bot[{i}] {bot.gameObject.name} cannot reach landing point due to boundary violation");
@@ -721,9 +760,13 @@ public class BotController : MonoBehaviour
                     }
                 }
                 
-                float distance = Vector3.Distance(bot.transform.position, predictedLandingPoint);
+                // Yatay mesafeyi hesapla (Y ekseni hariç)
+                float distance = Vector2.Distance(
+                    new Vector2(bot.transform.position.x, bot.transform.position.z),
+                    new Vector2(predictedLandingPoint.x, predictedLandingPoint.z)
+                );
                 
-                Debug.Log($"Bot[{i}] {bot.gameObject.name} - Team: {bot.team}, CanCatch: {bot.canCatchBall}, HasBall: {bot.hasBall}, Distance: {distance:F2}");
+                Debug.Log($"Bot[{i}] {bot.gameObject.name} - Team: {bot.team}, CanCatch: {bot.canCatchBall}, Distance: {distance:F2}");
                 
                 if (bot.canCatchBall && !bot.hasBall)
                 {
@@ -747,12 +790,19 @@ public class BotController : MonoBehaviour
         {
             if (closestDistance < 20f)
             {
+                // Bot'un gideceği pozisyon (Y ekseni bot'un kendi pozisyonunda kalacak)
+                Vector3 targetPos = new Vector3(
+                    predictedLandingPoint.x,
+                    closestBot.transform.position.y,
+                    predictedLandingPoint.z
+                );
+                
                 // MovingToBallState'e geç
                 MovingToBallState moveState = new MovingToBallState(closestBot);
-                moveState.SetTargetPosition(predictedLandingPoint);
+                moveState.SetTargetPosition(targetPos);
                 closestBot.ChangeState(moveState);
                 activeCatcher = closestBot;
-                Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving! Distance: {closestDistance:F2}");
+                Debug.Log($"✓ ACTIVATED: {closestBot.gameObject.name} is moving to catch position! Distance: {closestDistance:F2}");
             }
             else
             {
@@ -766,6 +816,81 @@ public class BotController : MonoBehaviour
     }
     
     static Vector3 PredictBallLandingPoint(Vector3 startPos, Vector3 velocity)
+    {
+        // Önce tüm botların ortalama catchHeight'ını bul
+        float averageCatchHeight = 1.5f; // Varsayılan
+        if (allBots != null && allBots.Length > 0)
+        {
+            float totalHeight = 0f;
+            int validCount = 0;
+            foreach (BotController bot in allBots)
+            {
+                if (bot != null)
+                {
+                    totalHeight += bot.catchHeight;
+                    validCount++;
+                }
+            }
+            if (validCount > 0)
+            {
+                averageCatchHeight = totalHeight / validCount;
+            }
+        }
+        
+        // Hedef yükseklik: ortalama catchHeight
+        float targetHeight = averageCatchHeight;
+        float gravity = Mathf.Abs(Physics.gravity.y);
+        
+        // Topun targetHeight'a ulaşacağı zamanı hesapla
+        float a = -0.5f * gravity;
+        float b = velocity.y;
+        float c = startPos.y - targetHeight;
+        
+        float discriminant = b * b - 4 * a * c;
+        if (discriminant < 0) 
+        {
+            // Top bu yüksekliğe ulaşamıyor, yere düşeceği noktayı hesapla
+            return PredictGroundLandingPoint(startPos, velocity);
+        }
+        
+        float t1 = (-b - Mathf.Sqrt(discriminant)) / (2 * a);
+        float t2 = (-b + Mathf.Sqrt(discriminant)) / (2 * a);
+        
+        // İniş zamanını seç (pozitif ve daha büyük olan)
+        float timeToTarget = 0f;
+        if (t1 > 0 && t2 > 0)
+        {
+            timeToTarget = Mathf.Max(t1, t2); // İniş anı (yukarı çıkıp inerken)
+        }
+        else if (t1 > 0)
+        {
+            timeToTarget = t1;
+        }
+        else if (t2 > 0)
+        {
+            timeToTarget = t2;
+        }
+        
+        if (timeToTarget <= 0)
+        {
+            // Geçerli zaman bulunamadı, yere düşme noktası
+            return PredictGroundLandingPoint(startPos, velocity);
+        }
+        
+        // Bu zamandaki pozisyon
+        Vector3 landingPoint = new Vector3(
+            startPos.x + velocity.x * timeToTarget,
+            targetHeight,
+            startPos.z + velocity.z * timeToTarget
+        );
+        
+        Debug.Log($"Ball will reach catch height ({targetHeight:F2}m) at position: {landingPoint} in {timeToTarget:F2}s");
+        
+        return landingPoint;
+    }
+    
+    // Yere düşme noktası hesaplama (fallback)
+    static Vector3 PredictGroundLandingPoint(Vector3 startPos, Vector3 velocity)
     {
         float groundHeight = 0.5f;
         float gravity = Mathf.Abs(Physics.gravity.y);
@@ -934,6 +1059,17 @@ public class BotController : MonoBehaviour
             #endif
         }
         
+        // HitPoint trigger alanını göster
+        if (hitPoint != null)
+        {
+            Gizmos.color = new Color(1, 0.5f, 0, 0.3f); // Turuncu yarı saydam
+            Gizmos.DrawWireSphere(hitPoint.position, hitPointTriggerDistance);
+            
+            // HitPoint'ten bot'a çizgi
+            Gizmos.color = new Color(1, 0.5f, 0, 0.5f);
+            Gizmos.DrawLine(transform.position, hitPoint.position);
+        }
+        
         // Yakalama alanını göster (silindir şeklinde)
         Vector3 catchCenter = transform.position + Vector3.up * catchHeight;
         
@@ -1068,7 +1204,18 @@ public class BotController : MonoBehaviour
         {
             Gizmos.color = new Color(1f, 0f, 1f, 0.5f);
             Gizmos.DrawWireSphere(predictedLandingPoint, 0.5f);
-            Gizmos.DrawLine(predictedLandingPoint + Vector3.up * 3f, predictedLandingPoint);
+            
+            // Yakalama yüksekliğini göster
+            if (allBots != null && allBots.Length > 0)
+            {
+                Gizmos.color = new Color(1f, 1f, 0f, 0.3f);
+                Gizmos.DrawWireCube(predictedLandingPoint, new Vector3(1f, 0.1f, 1f));
+                
+                // Yerden yükseklik çizgisi
+                Vector3 groundPoint = new Vector3(predictedLandingPoint.x, 0f, predictedLandingPoint.z);
+                Gizmos.color = new Color(1f, 1f, 0f, 0.5f);
+                Gizmos.DrawLine(groundPoint, predictedLandingPoint);
+            }
             
             if (activeCatcher == this)
             {
@@ -1110,6 +1257,18 @@ public class BotController : MonoBehaviour
             Gizmos.color = Color.magenta;
             Gizmos.DrawWireSphere(targetPos, 0.3f);
             Gizmos.DrawWireCube(targetPos, Vector3.one * 0.2f);
+            
+            // HitPoint'i özel olarak göster
+            if (!targetBot.CompareTag("Player"))
+            {
+                BotController targetBotController = targetBot.GetComponent<BotController>();
+                if (targetBotController != null && targetBotController.hitPoint != null)
+                {
+                    Gizmos.color = Color.yellow;
+                    Gizmos.DrawLine(targetBot.position, targetBotController.hitPoint.position);
+                    Gizmos.DrawWireSphere(targetBotController.hitPoint.position, 0.2f);
+                }
+            }
         }
     }
     
@@ -1147,9 +1306,13 @@ public class BotController : MonoBehaviour
                 }
                 else
                 {
-                    // Bot için catch height kullan
+                    // Bot için hitPoint yüksekliğini kullan
                     BotController targetBotController = targetBot.GetComponent<BotController>();
-                    if (targetBotController != null)
+                    if (targetBotController != null && targetBotController.hitPoint != null)
+                    {
+                        targetHeight = targetBotController.hitPoint.position.y;
+                    }
+                    else if (targetBotController != null)
                     {
                         targetHeight = targetBot.position.y + targetBotController.catchHeight;
                     }

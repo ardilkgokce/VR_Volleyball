@@ -137,10 +137,10 @@ public class PreparingHitState : BotState
         bot.isPerformingVolley = true;
         
         // Topu hemen hit point'e taşı
-        PositionBallAtHitPoint();
+        //PositionBallAtHitPoint();
         
-        // Animasyonu başlat
-        if (bot.animationController != null)
+        // Animasyonu başlat (eğer önceden başlatılmadıysa)
+        if (bot.animationController != null && !bot.animationController.IsPerformingVolley())
         {
             bot.animationController.PlayVolleyAnimation();
         }
@@ -164,12 +164,12 @@ public class PreparingHitState : BotState
             
             Debug.Log($"{bot.gameObject.name} positioned ball at hit point");
         }
-        // else if (ball != null)
-        // {
-        //     // Hit point yoksa fallback olarak bot'un üstüne koy
-        //     ball.transform.position = transform.position + Vector3.up * 1.5f;
-        //     Debug.LogWarning($"{bot.gameObject.name} has no hit point assigned! Using default position.");
-        // }
+        else if (ball != null)
+        {
+            // Hit point yoksa fallback olarak bot'un üstüne koy
+            ball.transform.position = transform.position + Vector3.up * 1.5f;
+            Debug.LogWarning($"{bot.gameObject.name} has no hit point assigned! Using default position.");
+        }
     }
     
     public override void Update()
@@ -225,7 +225,7 @@ public class HittingState : BotState
         }
         
         // Topu el pozisyonuna taşı
-        PositionBallAtHand();
+        //PositionBallAtHand();
         
         // Topu fırlat
         PerformHit();
@@ -238,20 +238,20 @@ public class HittingState : BotState
             // Topu hit point pozisyonuna taşı
             ball.transform.position = bot.hitPoint.position;
             
-            // // Opsiyonel: Hit point'in biraz önüne koy
-            // if (bot.hitPoint.forward != Vector3.zero)
-            // {
-            //     ball.transform.position += bot.hitPoint.forward * 0.1f; // 10cm önde
-            // }
+            // Opsiyonel: Hit point'in biraz önüne koy
+            if (bot.hitPoint.forward != Vector3.zero)
+            {
+                ball.transform.position += bot.hitPoint.forward * 0.1f; // 10cm önde
+            }
             
             Debug.Log($"{bot.gameObject.name} positioned ball at hit point for throwing");
         }
-        // else if (ball != null)
-        // {
-        //     // Hit point yoksa fallback
-        //     ball.transform.position = transform.position + Vector3.up * 1.5f;
-        //     Debug.LogWarning($"{bot.gameObject.name} has no hit point assigned! Using default position.");
-        // }
+        else if (ball != null)
+        {
+            // Hit point yoksa fallback
+            ball.transform.position = transform.position + Vector3.up * 1.5f;
+            Debug.LogWarning($"{bot.gameObject.name} has no hit point assigned! Using default position.");
+        }
     }
     
     private void PerformHit()

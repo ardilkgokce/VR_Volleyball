@@ -3221,9 +3221,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   team: 1
   detectionRadius: 5
-  catchRadius: 0.5
+  catchRadius: 1.2
   catchHeight: 2
   catchVerticalRange: 0.5
+  hitPointTriggerDistance: 1.4
   throwForce: 15
   throwHeight: 5
   moveSpeed: 4
@@ -3459,7 +3460,7 @@ Transform:
   m_GameObject: {fileID: 8543947273775500739}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.931, z: 0.293}
+  m_LocalPosition: {x: 0, y: 1.878, z: 0.389}
   m_LocalScale: {x: 0.83333325, y: 0.83333325, z: 0.83333325}
   m_ConstrainProportionsScale: 0
   m_Children: []
