@@ -689,6 +689,7 @@ public class BotController : MonoBehaviour
         finalVelocity.y = v0 * Mathf.Sin(angle);
         
         ballRb.velocity = finalVelocity;
+        animationController.PlayVolleyAnimation();
         
         CalculateLandingPoint(ball.transform.position, finalVelocity);
         
