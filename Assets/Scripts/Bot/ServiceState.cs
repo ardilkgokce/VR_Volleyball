@@ -9,6 +9,7 @@ public class ServiceState : BotState
     private Rigidbody ballRb;
     private bool isTossing = false;
     private bool hasServed = false;
+    private bool shouldPerformHit = false; // FixedUpdate'te vuruş yapılacağını belirtir
     private Vector3 servicePosition; // Servis pozisyonu
     
     // Inspector'dan ayarlanabilir servis parametreleri
@@ -34,6 +35,7 @@ public class ServiceState : BotState
     
     private ServiceSettings settings;
     private float hitTime; // Vuruş zamanı (saniye cinsinden)
+    private Coroutine serviceCoroutine;
     
     public ServiceState(BotController bot, GameObject ballObj, Transform target) : base(bot) 
     {
@@ -70,7 +72,7 @@ public class ServiceState : BotState
         LookAtTarget(targetBot.position);
         
         // Servis sürecini başlat
-        bot.StartCoroutine(PerformService());
+        serviceCoroutine = bot.StartCoroutine(PerformService());
         
         Debug.Log($"{bot.gameObject.name} preparing to serve to {targetBot.name}");
     }
@@ -112,14 +114,14 @@ public class ServiceState : BotState
             Debug.Log($"{bot.gameObject.name} started spike animation for service");
         }
         
-        // 4. Aşama: Vuruş frame'ine kadar bekle (toplam süre)
-        float waitTime = hitTime + settings.animationStartDelay;
+        // 4. Aşama: Vuruş frame'ine kadar bekle
+        float waitTime = hitTime - settings.animationStartDelay;
         yield return new WaitForSeconds(waitTime);
         
-        // 5. Aşama: Topa vur
+        // 5. Aşama: Vuruşu FixedUpdate'te yapmak için işaretle
         if (!hasServed)
         {
-            PerformServiceHit();
+            shouldPerformHit = true;
         }
     }
     
@@ -137,7 +139,8 @@ public class ServiceState : BotState
         {
             ballRb.useGravity = true;
             
-            // Topu yukarı fırlat
+            // Topu yukarı fırlat - FixedUpdate'te velocity değişiklikleri daha güvenli
+            // Ama toss basit bir yukarı hareket olduğu için sorun yaratmaz
             ballRb.velocity = Vector3.up * settings.tossForce;
             
             Debug.Log($"{bot.gameObject.name} tossed the ball up for service");
@@ -149,6 +152,7 @@ public class ServiceState : BotState
         if (ball == null || targetBot == null || hasServed || ballRb == null) return;
         
         hasServed = true;
+        shouldPerformHit = false;
         
         // State güncellemeleri
         bot.hasBall = false;
@@ -223,7 +227,7 @@ public class ServiceState : BotState
         Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
         finalVelocity.y = v0 * Mathf.Sin(angle);
         
-        // Topu fırlat
+        // Topu fırlat - VELOCITY ATAMASINI FIXEDUPDATE'TE YAP
         ballRb.velocity = finalVelocity;
         
         // Landing point hesapla - gerçek vuruş pozisyonundan
@@ -250,6 +254,12 @@ public class ServiceState : BotState
     
     public override void FixedUpdate()
     {
+        // Vuruş zamanı geldiyse ve henüz yapılmadıysa
+        if (shouldPerformHit && !hasServed)
+        {
+            PerformServiceHit();
+        }
+        
         // Servis tamamlandıysa state'i değiştir
         if (hasServed)
         {
@@ -284,9 +294,16 @@ public class ServiceState : BotState
     
     public override void Exit()
     {
+        // Coroutine'i durdur
+        if (serviceCoroutine != null)
+        {
+            bot.StopCoroutine(serviceCoroutine);
+        }
+        
         bot.isPerformingVolley = false;
         hasServed = false;
         isTossing = false;
+        shouldPerformHit = false;
         Debug.Log($"{bot.gameObject.name} finished serving");
     }
 }

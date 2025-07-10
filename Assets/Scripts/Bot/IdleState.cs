@@ -83,7 +83,7 @@ public class MovingToBallState : BotState
         }
         
         // Hareket et
-        Vector3 movement = direction.normalized * currentSpeed * Time.deltaTime;
+        Vector3 movement = direction.normalized * currentSpeed * Time.fixedDeltaTime;
         Vector3 newPosition = transform.position + movement;
         
         // Sınır kontrolü
@@ -99,7 +99,7 @@ public class MovingToBallState : BotState
         if (direction != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(direction);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, bot.rotationSpeed * Time.deltaTime * 2f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, bot.rotationSpeed * Time.fixedDeltaTime * 2f);
         }
         
         // Top kontrolü - hareket halindeyken de kontrol et
@@ -204,6 +204,7 @@ public class HittingState : BotState
     private Transform targetBot;
     private GameObject ball;
     private Rigidbody ballRb;
+    private bool hasPerformedHit = false; // Vuruşun yapıldığını takip et
     
     public HittingState(BotController bot, Transform target, GameObject ballObj) : base(bot) 
     {
@@ -227,8 +228,8 @@ public class HittingState : BotState
         // Topu el pozisyonuna taşı
         PositionBallAtHand();
         
-        // Topu fırlat
-        PerformHit();
+        // Vuruşu bir sonraki FixedUpdate'te yap
+        hasPerformedHit = false;
     }
     
     private void PositionBallAtHand()
@@ -256,6 +257,9 @@ public class HittingState : BotState
     
     private void PerformHit()
     {
+        if (hasPerformedHit) return; // Çift vuruşu engelle
+        hasPerformedHit = true;
+        
         bool isTargetVRPlayer = targetBot.CompareTag("Player");
         
         // Debug log
@@ -323,6 +327,7 @@ public class HittingState : BotState
         Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
         finalVelocity.y = v0 * Mathf.Sin(angle);
         
+        // VELOCITY ATAMASINI FIXEDUPDATE'TE YAP
         ballRb.velocity = finalVelocity;
         
         // Landing point hesapla
@@ -338,19 +343,27 @@ public class HittingState : BotState
     
     public override void Update()
     {
-        // Hit anında yapılacak bir şey yok
+        // Update'te bir şey yapma, animasyonlar zaten çalışıyor
     }
     
     public override void FixedUpdate()
     {
-        // Hit sonrası - duruma göre Idle veya Returning state'ine geç
-        if (bot.autoReturnToDefault)
+        // İlk FixedUpdate'te vuruşu yap
+        if (!hasPerformedHit && ball != null && ballRb != null)
         {
-            bot.StartCoroutine(DelayedReturnToDefault());
+            PerformHit();
         }
-        else
+        // Vuruş yapıldıysa state değiştir
+        else if (hasPerformedHit)
         {
-            bot.ChangeState(new IdleState(bot));
+            if (bot.autoReturnToDefault)
+            {
+                bot.StartCoroutine(DelayedReturnToDefault());
+            }
+            else
+            {
+                bot.ChangeState(new IdleState(bot));
+            }
         }
     }
     
@@ -373,7 +386,6 @@ public class HittingState : BotState
             {
                 bot.ChangeState(new ReturningToPositionState(bot));
             }
-            
         }
     }
     
@@ -454,7 +466,7 @@ public class ReturningToPositionState : BotState
             }
             else
             {
-                transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.deltaTime * 2f);
+                transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.fixedDeltaTime * 2f);
             }
             return;
         }
@@ -469,7 +481,7 @@ public class ReturningToPositionState : BotState
         if (distance < bot.stoppingDistance)
         {
             // Pozisyona ulaştık, rotasyonu da düzelt
-            transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.deltaTime);
+            transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.fixedDeltaTime);
             
             // Rotasyon da tamamsa idle'a geç
             float angleDiff = Quaternion.Angle(transform.rotation, bot.defaultPosition.rotation);
@@ -483,14 +495,14 @@ public class ReturningToPositionState : BotState
         }
         
         // Hareket et
-        Vector3 movement = direction.normalized * bot.moveSpeed * Time.deltaTime;
+        Vector3 movement = direction.normalized * bot.moveSpeed * Time.fixedDeltaTime;
         transform.position += movement;
         
         // Rotasyon
         if (direction != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(direction);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, bot.rotationSpeed * Time.deltaTime);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, bot.rotationSpeed * Time.fixedDeltaTime);
         }
     }
     
