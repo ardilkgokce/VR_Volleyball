@@ -64,6 +64,19 @@ public class BotController : MonoBehaviour
     public int trajectoryPoints = 30;
     private Vector3 landingPoint;
     
+    [Header("Service Settings")]
+    public ServiceState.ServiceSettings serviceSettings = new ServiceState.ServiceSettings
+    {
+        tossHeight = 2f,
+        tossForce = 4f,
+        animationStartDelay = 0.5f,
+        hitFrame = 18f,
+        animationFPS = 24f,
+        serviceDistanceBack = 2f,
+        serviceAngle = 30f,
+        servicePowerMultiplier = 1.2f
+    };
+    
     // State Machine
     private BotState currentState;
     private string currentStateName = "None";
@@ -1010,33 +1023,45 @@ public class BotController : MonoBehaviour
         ballRb = ball.GetComponent<Rigidbody>();
         hasBall = true;
         canCatchBall = true;
-        
+    
         cachedBall = ball;
         cachedBallTransform = ball.transform;
         cachedBallRb = ballRb;
-        
-        ball.transform.position = myTransform.position + catchOffset;
-        ball.transform.SetParent(myTransform);
-        
+    
         UpdateBotColorInternal();
-        
+    
         if (showTrajectory)
             Debug.Log($"{gameObject.name} topu aldı ve {(isServing ? "servis atacak" : "hemen atıyor")}...");
-        
+    
         // Servis için özel hedefleme
         if (isServing)
         {
             targetBot = GetOpponentTarget();
+        
+            if (targetBot != null && ball != null)
+            {
+                // Animasyonlu servis state'ine geç
+                ChangeState(new ServiceState(this, ball, targetBot));
+            }
+            else
+            {
+                Debug.LogError($"{gameObject.name} couldn't find target for service!");
+                ChangeState(new IdleState(this));
+            }
         }
         else
         {
+            // Normal vuruş (servis değil)
             targetBot = GetRandomTarget();
-        }
         
-        if (targetBot != null && ball != null)
-        {
-            // Direkt vuruş state'ine geç (servis için hazırlık yok)
-            ChangeState(new HittingState(this, targetBot, ball));
+            ball.transform.position = myTransform.position + catchOffset;
+            ball.transform.SetParent(myTransform);
+        
+            if (targetBot != null && ball != null)
+            {
+                // Direkt vuruş state'ine geç
+                ChangeState(new HittingState(this, targetBot, ball));
+            }
         }
     }
     

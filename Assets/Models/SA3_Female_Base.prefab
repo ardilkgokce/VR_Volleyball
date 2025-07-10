@@ -3234,10 +3234,11 @@ MonoBehaviour:
   maxMoveDistance: 20
   netBoundary: 0.5
   outOfBoundsLimit: 2
+  minReturnDistance: 0.5
   animationController: {fileID: -3641224964224611046}
   hitPoint: {fileID: 3822330077110166746}
   defaultPosition: {fileID: 0}
-  returnToDefaultDelay: 0.7
+  returnToDefaultDelay: 0.3
   autoReturnToDefault: 1
   targetBot: {fileID: 0}
   ball: {fileID: 0}
@@ -3251,6 +3252,15 @@ MonoBehaviour:
   rotationSpeed: 10
   showTrajectory: 1
   trajectoryPoints: 30
+  serviceSettings:
+    tossHeight: 2
+    tossForce: 8
+    animationStartDelay: 0.5
+    hitFrame: 7.6
+    animationFPS: 24
+    serviceDistanceBack: 4
+    serviceAngle: 30
+    servicePowerMultiplier: 1
   isMovingToBall: 0
   isReturningToDefault: 0
   isPerformingVolley: 0
@@ -3270,11 +3280,14 @@ MonoBehaviour:
   idleStateName: Idle
   runStateName: Run_F
   volleyStateName: BX_Volleying_01
+  spikeStateName: BX_Spiking_01
   speedParam: Speed
   isRunningParam: IsRunning
   volleyTrigger: Volley
+  spikeTrigger: Spike
   volleyStartTime: 0.467
   volleyAnimationDuration: 1
+  spikeAnimationDuration: 1
   transitionTime: 0.1
 --- !u!1 &8152577885592372248
 GameObject:

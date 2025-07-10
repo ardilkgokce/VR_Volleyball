@@ -1,0 +1,292 @@
+using UnityEngine;
+using System.Collections;
+
+// SERVICE STATE - Animasyonlu servis atışı
+public class ServiceState : BotState
+{
+    private GameObject ball;
+    private Transform targetBot;
+    private Rigidbody ballRb;
+    private bool isTossing = false;
+    private bool hasServed = false;
+    private Vector3 servicePosition; // Servis pozisyonu
+    
+    // Inspector'dan ayarlanabilir servis parametreleri
+    [System.Serializable]
+    public class ServiceSettings
+    {
+        [Header("Toss Settings")]
+        public float tossHeight = 2f; // Topun yukarı fırlatılma yüksekliği
+        public float tossForce = 4f; // Yukarı fırlatma kuvveti
+        
+        [Header("Animation Timing")]
+        public float animationStartDelay = 0.5f; // Topu yukarı attıktan sonra animasyon başlama süresi
+        public float hitFrame = 18f; // Vuruş frame'i
+        public float animationFPS = 24f; // Animasyon FPS'i
+        
+        [Header("Service Position")]
+        public float serviceDistanceBack = 2f; // Servis için geriye gitme mesafesi
+        
+        [Header("Service Power")]
+        public float serviceAngle = 30f; // Servis açısı (derece)
+        public float servicePowerMultiplier = 1.2f; // Servis güç çarpanı
+    }
+    
+    private ServiceSettings settings;
+    private float hitTime; // Vuruş zamanı (saniye cinsinden)
+    
+    public ServiceState(BotController bot, GameObject ballObj, Transform target) : base(bot) 
+    {
+        ball = ballObj;
+        ballRb = ball.GetComponent<Rigidbody>();
+        targetBot = target;
+        
+        // Bot'tan servis ayarlarını al (eğer varsa)
+        settings = bot.serviceSettings ?? new ServiceSettings();
+        hitTime = settings.hitFrame / settings.animationFPS;
+    }
+    
+    public override void Enter()
+    {
+        if (ball == null || targetBot == null)
+        {
+            Debug.LogError("ServiceState: Missing ball or target!");
+            bot.ChangeState(new IdleState(bot));
+            return;
+        }
+        
+        // Servis pozisyonunu belirle (sahanın gerisinde)
+        SetServicePosition();
+        
+        // Servise hazırlan
+        bot.hasBall = true;
+        bot.isPerformingVolley = true;
+        
+        // Topu servise hazır pozisyona getir
+        ball.transform.position = servicePosition + Vector3.up * 1.2f; // Bel hizasında
+        ball.transform.SetParent(bot.transform);
+        
+        // Hedefe doğru dön
+        LookAtTarget(targetBot.position);
+        
+        // Servis sürecini başlat
+        bot.StartCoroutine(PerformService());
+        
+        Debug.Log($"{bot.gameObject.name} preparing to serve to {targetBot.name}");
+    }
+    
+    private void SetServicePosition()
+    {
+        // Bot'un mevcut pozisyonunu al ve biraz geriye çek
+        servicePosition = bot.transform.position;
+        
+        // Takıma göre geriye doğru hareket
+        if (bot.team == Team.Red)
+        {
+            servicePosition.x -= settings.serviceDistanceBack; // Red takım için sola (geriye)
+        }
+        else
+        {
+            servicePosition.x += settings.serviceDistanceBack; // Blue takım için sağa (geriye)
+        }
+        
+        // Bot'u servis pozisyonuna hareket ettir
+        bot.transform.position = servicePosition;
+    }
+    
+    private IEnumerator PerformService()
+    {
+        // 1. Aşama: Topu yukarı fırlat
+        yield return new WaitForSeconds(0.5f); // Hazırlık süresi
+        
+        TossBall();
+        
+        // 2. Aşama: Animasyon başlatma zamanını bekle
+        yield return new WaitForSeconds(settings.animationStartDelay);
+        
+        // 3. Aşama: Spike animasyonunu başlat
+        if (bot.animationController != null)
+        {
+            // Spike animasyonunu başlat
+            bot.animationController.PlaySpikeAnimation();
+            Debug.Log($"{bot.gameObject.name} started spike animation for service");
+        }
+        
+        // 4. Aşama: Vuruş frame'ine kadar bekle (toplam süre)
+        float waitTime = hitTime + settings.animationStartDelay;
+        yield return new WaitForSeconds(waitTime);
+        
+        // 5. Aşama: Topa vur
+        if (!hasServed)
+        {
+            PerformServiceHit();
+        }
+    }
+    
+    private void TossBall()
+    {
+        if (ball == null) return;
+        
+        isTossing = true;
+        
+        // Topu serbest bırak
+        ball.transform.SetParent(null);
+        
+        // Rigidbody'yi aktif et
+        if (ballRb != null)
+        {
+            ballRb.useGravity = true;
+            
+            // Topu yukarı fırlat
+            ballRb.velocity = Vector3.up * settings.tossForce;
+            
+            Debug.Log($"{bot.gameObject.name} tossed the ball up for service");
+        }
+    }
+    
+    private void PerformServiceHit()
+    {
+        if (ball == null || targetBot == null || hasServed || ballRb == null) return;
+        
+        hasServed = true;
+        
+        // State güncellemeleri
+        bot.hasBall = false;
+        bot.catchCooldown = 0.5f;
+        bot.canCatchBall = false;
+        
+        // Vuruş anındaki topun gerçek pozisyonunu al (yukarıda olacak)
+        Vector3 currentBallPosition = ball.transform.position;
+        
+        // Eğer hit point varsa ve top ona yakınsa, hit point pozisyonunu kullan
+        Vector3 hitPosition;
+        if (bot.hitPoint != null && Vector3.Distance(currentBallPosition, bot.hitPoint.position) < 1f)
+        {
+            hitPosition = bot.hitPoint.position;
+            ball.transform.position = hitPosition;
+        }
+        else
+        {
+            // Hit point yoksa veya uzaksa, topun mevcut pozisyonunu kullan
+            hitPosition = currentBallPosition;
+        }
+        
+        // Tüm botların yakalama iznini kapat
+        BotController[] allBots = Object.FindObjectsOfType<BotController>();
+        foreach (BotController b in allBots)
+        {
+            b.canCatchBall = false;
+            b.lastThrower = bot.transform;
+        }
+        
+        // Hedefin yakalama iznini aç
+        if (targetBot.CompareTag("Player"))
+        {
+            VRPlayerProxy vrProxy = targetBot.GetComponent<VRPlayerProxy>();
+            vrProxy.EnableCatching();
+        }
+        else
+        {
+            BotController targetController = targetBot.GetComponent<BotController>();
+            targetController.EnableCatching();
+        }
+        
+        // VolleyballBall component'ine vuruşu bildir
+        VolleyballBall vbBall = ball.GetComponent<VolleyballBall>();
+        if (vbBall != null)
+        {
+            vbBall.OnHit(bot.transform, bot.team);
+        }
+        
+        // Hedef pozisyonu hesapla - mevcut sistemi kullan
+        Vector3 targetPosition = bot.GetTargetPosition(targetBot);
+        
+        // VURUŞ ANINDAKİ GERÇEK POZİSYONDAN HESAPLA
+        Vector3 direction = targetPosition - hitPosition;
+        float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
+        float heightDifference = targetPosition.y - hitPosition.y;
+        
+        // Servis için daha düşük açı ve daha güçlü vuruş
+        float angle = settings.serviceAngle * Mathf.Deg2Rad; // Inspector'dan ayarlanabilir açı
+        float gravity = Mathf.Abs(Physics.gravity.y);
+        
+        // Hız hesaplama - yükseklik farkını da hesaba kat
+        float v0 = Mathf.Sqrt((gravity * horizontalDistance * horizontalDistance) / 
+                             (2 * Mathf.Cos(angle) * Mathf.Cos(angle) * 
+                             (horizontalDistance * Mathf.Tan(angle) - heightDifference)));
+        
+        // Servis için ekstra güç ve drag kompanzasyonu
+        float dragCompensation = 1f + (ballRb.drag * 0.2f * horizontalDistance / 10f);
+        v0 *= dragCompensation * settings.servicePowerMultiplier;
+        
+        // Velocity vektörünü oluştur
+        Vector3 finalVelocity = new Vector3(direction.x, 0, direction.z).normalized * v0 * Mathf.Cos(angle);
+        finalVelocity.y = v0 * Mathf.Sin(angle);
+        
+        // Topu fırlat
+        ballRb.velocity = finalVelocity;
+        
+        // Landing point hesapla - gerçek vuruş pozisyonundan
+        bot.CalculateLandingPointInternal(hitPosition, finalVelocity);
+        
+        // Renk güncelle
+        bot.UpdateBotColorInternal();
+        
+        // Referansları temizle
+        bot.ball = null;
+        bot.ballRb = null;
+        
+        Debug.Log($"{bot.gameObject.name} served from height {hitPosition.y:F2} to {targetBot.name}!");
+    }
+    
+    public override void Update()
+    {
+        // Servis sırasında hedefe bakmaya devam et
+        if (!hasServed && targetBot != null)
+        {
+            LookAtTarget(targetBot.position);
+        }
+    }
+    
+    public override void FixedUpdate()
+    {
+        // Servis tamamlandıysa state'i değiştir
+        if (hasServed)
+        {
+            // Servisten sonra pozisyona dönüş
+            if (bot.autoReturnToDefault)
+            {
+                bot.StartCoroutine(DelayedReturnToDefault());
+            }
+            else
+            {
+                bot.ChangeState(new IdleState(bot));
+            }
+        }
+    }
+    
+    private IEnumerator DelayedReturnToDefault()
+    {
+        // Kısa bir süre bekle
+        yield return new WaitForSeconds(0.5f);
+        
+        // Idle state'e geç
+        bot.ChangeState(new IdleState(bot));
+        
+        // Sonra default pozisyona dön
+        yield return new WaitForSeconds(bot.returnToDefaultDelay);
+        
+        if (bot.defaultPosition != null)
+        {
+            bot.ChangeState(new ReturningToPositionState(bot));
+        }
+    }
+    
+    public override void Exit()
+    {
+        bot.isPerformingVolley = false;
+        hasServed = false;
+        isTossing = false;
+        Debug.Log($"{bot.gameObject.name} finished serving");
+    }
+}
