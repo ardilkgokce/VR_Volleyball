@@ -24,6 +24,21 @@ public class VRHandController : MonoBehaviour
     private Renderer handRenderer;
     private float colorResetTimer = 0f;
     
+    [Header("Parabolic Hit Settings")]
+    [Tooltip("Yavaş vuruş için yukarı açı (derece)")]
+    public float slowHitAngle = 55f;
+    [Tooltip("Orta hızlı vuruş için yukarı açı (derece)")]
+    public float mediumHitAngle = 40f;
+    [Tooltip("Hızlı vuruş için yukarı açı (derece)")]
+    public float fastHitAngle = 25f;
+    [Tooltip("Çok hızlı vuruş için yukarı açı (derece)")]
+    public float veryFastHitAngle = 15f;
+    
+    [Tooltip("Hız eşikleri")]
+    public float slowSpeedThreshold = 3f;
+    public float mediumSpeedThreshold = 6f;
+    public float fastSpeedThreshold = 10f;
+    
     // VR Input
     private InputDevice targetDevice;
     private Vector3 previousPosition;
@@ -153,8 +168,8 @@ public class VRHandController : MonoBehaviour
         float hitForce = handSpeed * hitForceMultiplier;
         hitForce = Mathf.Clamp(hitForce, 5f, 30f);
         
-        // Apply force to ball
-        ApplyHitForce(ballRb, hitDirection, hitForce);
+        // Apply force to ball with parabolic trajectory
+        ApplyParabolicHitForce(ballRb, hitDirection, hitForce, handSpeed);
         
         // Effects
         OnSuccessfulHit(contact.point);
@@ -196,31 +211,73 @@ public class VRHandController : MonoBehaviour
         float hitForce = handSpeed * hitForceMultiplier;
         hitForce = Mathf.Clamp(hitForce, 5f, 30f);
         
-        // Apply force to ball
-        ApplyHitForce(ballRb, hitDirection, hitForce);
+        // Apply force to ball with parabolic trajectory
+        ApplyParabolicHitForce(ballRb, hitDirection, hitForce, handSpeed);
         
         // Effects
         OnSuccessfulHit(ball.transform.position);
     }
     
-    void ApplyHitForce(Rigidbody ballRb, Vector3 direction, float force)
+    void ApplyParabolicHitForce(Rigidbody ballRb, Vector3 baseDirection, float force, float handSpeed)
     {
         // Reset ball velocity for clean hit
         ballRb.velocity = Vector3.zero;
         
-        // Apply the hit force
-        Vector3 finalVelocity = direction * force;
+        // Hıza göre açıyı belirle
+        float angle;
+        string hitType;
         
-        // Add upward bonus if hitting forward
-        if (direction.y < 0.5f)
+        if (handSpeed < slowSpeedThreshold)
         {
-            finalVelocity.y += upwardForceBonus;
+            angle = slowHitAngle;
+            hitType = "Soft Set";
+        }
+        else if (handSpeed < mediumSpeedThreshold)
+        {
+            angle = mediumHitAngle;
+            hitType = "Normal Hit";
+        }
+        else if (handSpeed < fastSpeedThreshold)
+        {
+            angle = fastHitAngle;
+            hitType = "Power Hit";
+        }
+        else
+        {
+            angle = veryFastHitAngle;
+            hitType = "Spike";
         }
         
+        // Açıyı radyana çevir
+        float angleRad = angle * Mathf.Deg2Rad;
+        
+        // Yatay yön (Y komponenti sıfırlanmış)
+        Vector3 horizontalDirection = new Vector3(baseDirection.x, 0, baseDirection.z).normalized;
+        
+        // El aşağı hareket ediyorsa açıyı azalt (smaç efekti)
+        if (currentVelocity.y < -2f)
+        {
+            angleRad *= 0.5f; // Açıyı yarıya düşür
+            hitType = "Downward Spike";
+            force *= 1.2f; // Biraz daha güç ekle
+        }
+        
+        // Parabolik velocity hesapla
+        Vector3 finalVelocity;
+        
+        // Yatay ve dikey hız bileşenleri
+        float horizontalSpeed = force * Mathf.Cos(angleRad);
+        float verticalSpeed = force * Mathf.Sin(angleRad);
+        
+        // Final velocity
+        finalVelocity = horizontalDirection * horizontalSpeed;
+        finalVelocity.y = verticalSpeed;
+        
+        // Velocity'yi uygula
         ballRb.velocity = finalVelocity;
         
-        // Add some spin
-        Vector3 spin = Vector3.Cross(Vector3.up, direction) * 5f;
+        // Add some spin based on hit direction
+        Vector3 spin = Vector3.Cross(Vector3.up, horizontalDirection) * 3f;
         ballRb.angularVelocity = spin;
         
         // ÖNCELİK SIRASI ÖNEMLİ:
@@ -230,7 +287,7 @@ public class VRHandController : MonoBehaviour
         // 2. Sonra tahmin sistemini çalıştır (velocity set edildikten sonra)
         StartCoroutine(NotifyPredictionDelayed(ballRb));
         
-        Debug.Log($"VR Hand hit ball! Speed: {force:F1}, Direction: {direction}");
+        Debug.Log($"VR Hand {hitType}! Speed: {handSpeed:F1}m/s, Angle: {angle}°, Force: {force:F1}");
     }
     
     // Velocity'nin oturması için küçük bir gecikme
@@ -319,7 +376,28 @@ public class VRHandController : MonoBehaviour
             // Show velocity magnitude
             Gizmos.color = Color.green;
             Gizmos.DrawWireSphere(transform.position + currentVelocity.normalized * 0.5f, currentVelocity.magnitude * 0.1f);
+            
+            // Hıza göre açıyı göster
+            float handSpeed = currentVelocity.magnitude;
+            float angle = GetAngleForSpeed(handSpeed);
+            Vector3 forward = currentVelocity.normalized;
+            forward.y = 0;
+            forward.Normalize();
+            
+            // Parabolik yörüngeyi göster
+            Gizmos.color = Color.cyan;
+            Vector3 parabolicDir = Quaternion.AngleAxis(-angle, Vector3.Cross(forward, Vector3.up)) * forward;
+            Gizmos.DrawRay(transform.position, parabolicDir * 2f);
         }
+    }
+    
+    // Hıza göre açı hesaplama (debug için)
+    float GetAngleForSpeed(float speed)
+    {
+        if (speed < slowSpeedThreshold) return slowHitAngle;
+        else if (speed < mediumSpeedThreshold) return mediumHitAngle;
+        else if (speed < fastSpeedThreshold) return fastHitAngle;
+        else return veryFastHitAngle;
     }
     
     // Public method for bot targeting
