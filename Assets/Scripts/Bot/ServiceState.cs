@@ -57,16 +57,22 @@ public class ServiceState : BotState
             return;
         }
         
-        // Servis pozisyonunu belirle (sahanın gerisinde)
-        SetServicePosition();
-        
         // Servise hazırlan
         bot.hasBall = true;
         bot.isPerformingVolley = true;
         
-        // Topu servise hazır pozisyona getir
-        ball.transform.position = servicePosition + Vector3.up * 1.2f; // Bel hizasında
+        // Önce topu bot'un MEVCUT pozisyonuna getir (parent yapmadan)
+        ball.transform.position = bot.transform.position + Vector3.up * 1.2f;
+        
+        // Bot'u servis pozisyonuna taşı
+        SetServicePosition();
+        
+        // ŞİMDİ topu bot'a parent yap ve local pozisyonu ayarla
         ball.transform.SetParent(bot.transform);
+        ball.transform.localPosition = (Vector3.up * 1f) + Vector3.forward * 0.5f;
+        
+        // Transform senkronizasyonu
+        Physics.SyncTransforms();
         
         // Hedefe doğru dön
         LookAtTarget(targetBot.position);
@@ -79,8 +85,11 @@ public class ServiceState : BotState
     
     private void SetServicePosition()
     {
-        // Bot'un mevcut pozisyonunu al ve biraz geriye çek
-        servicePosition = bot.transform.position;
+        // Bot'un mevcut pozisyonunu kaydet
+        Vector3 currentPosition = bot.transform.position;
+        
+        // Hedef servis pozisyonunu hesapla
+        servicePosition = currentPosition;
         
         // Takıma göre geriye doğru hareket
         if (bot.team == Team.Red)
@@ -94,12 +103,17 @@ public class ServiceState : BotState
         
         // Bot'u servis pozisyonuna hareket ettir
         bot.transform.position = servicePosition;
+        
+        Debug.Log($"{bot.gameObject.name} moved to service position: {currentPosition} -> {servicePosition}");
     }
     
     private IEnumerator PerformService()
     {
         // 1. Aşama: Topu yukarı fırlat
         yield return new WaitForSeconds(0.5f); // Hazırlık süresi
+        
+        // Top pozisyonunu kontrol et (debug)
+        Debug.Log($"{bot.gameObject.name} - Ball position before toss: {ball.transform.position}");
         
         TossBall();
         
@@ -131,19 +145,24 @@ public class ServiceState : BotState
         
         isTossing = true;
         
+        // Parent'tan çıkarmadan önce world pozisyonunu kaydet
+        Vector3 ballWorldPos = ball.transform.position;
+        
         // Topu serbest bırak
         ball.transform.SetParent(null);
+        
+        // World pozisyonunu geri yükle (parent değişikliği bozmasın)
+        ball.transform.position = ballWorldPos;
         
         // Rigidbody'yi aktif et
         if (ballRb != null)
         {
             ballRb.useGravity = true;
             
-            // Topu yukarı fırlat - FixedUpdate'te velocity değişiklikleri daha güvenli
-            // Ama toss basit bir yukarı hareket olduğu için sorun yaratmaz
+            // Topu yukarı fırlat
             ballRb.velocity = Vector3.up * settings.tossForce;
             
-            Debug.Log($"{bot.gameObject.name} tossed the ball up for service");
+            Debug.Log($"{bot.gameObject.name} tossed the ball up from position: {ballWorldPos}");
         }
     }
     
