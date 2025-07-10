@@ -137,7 +137,7 @@ public class PreparingHitState : BotState
         bot.isPerformingVolley = true;
         
         // Topu hemen hit point'e taşı
-        //PositionBallAtHitPoint();
+        PositionBallAtHitPoint();
         
         // Animasyonu başlat (eğer önceden başlatılmadıysa)
         if (bot.animationController != null && !bot.animationController.IsPerformingVolley())
@@ -225,7 +225,7 @@ public class HittingState : BotState
         }
         
         // Topu el pozisyonuna taşı
-        //PositionBallAtHand();
+        PositionBallAtHand();
         
         // Topu fırlat
         PerformHit();
@@ -363,9 +363,17 @@ public class HittingState : BotState
         yield return new WaitForSeconds(bot.returnToDefaultDelay);
         
         // Eğer hala idle'daysak ve top yoksa, default pozisyona dön
-        if (!bot.hasBall && !bot.isMovingToBall)
+        if (!bot.hasBall && !bot.isMovingToBall && bot.defaultPosition != null)
         {
-            bot.ChangeState(new ReturningToPositionState(bot));
+            // Default pozisyona olan mesafeyi kontrol et
+            float distanceToDefault = Vector3.Distance(bot.transform.position, bot.defaultPosition.position);
+            
+            // Minimum mesafe kontrolü - çok yakınsa dönmeye gerek yok
+            if (distanceToDefault > 0.5f) // 50cm'den uzaksa
+            {
+                bot.ChangeState(new ReturningToPositionState(bot));
+            }
+            
         }
     }
     
@@ -378,24 +386,50 @@ public class HittingState : BotState
 // RETURNING TO POSITION STATE - Default pozisyona dönüş
 public class ReturningToPositionState : BotState
 {
+    private bool isRotationOnly = false;
+    
     public ReturningToPositionState(BotController bot) : base(bot) { }
     
     public override void Enter()
     {
-        bot.isReturningToDefault = true;
-        Debug.Log($"{bot.gameObject.name} returning to default position");
+        if (bot.defaultPosition == null)
+        {
+            bot.ChangeState(new IdleState(bot));
+            return;
+        }
+        
+        // Mesafe kontrolü
+        float distance = Vector3.Distance(transform.position, bot.defaultPosition.position);
+        
+        if (distance <= bot.minReturnDistance)
+        {
+            // Sadece rotasyon düzeltmesi yap
+            isRotationOnly = true;
+            Debug.Log($"{bot.gameObject.name} only fixing rotation (distance: {distance:F2}m)");
+        }
+        else
+        {
+            // Normal dönüş
+            bot.isReturningToDefault = true;
+            Debug.Log($"{bot.gameObject.name} returning to default position (distance: {distance:F2}m)");
+        }
     }
     
     public override void Update()
     {
-        // Hareket animasyonu
-        if (bot.defaultPosition != null)
+        if (!isRotationOnly && bot.defaultPosition != null)
         {
+            // Hareket animasyonu
             Vector3 direction = bot.defaultPosition.position - transform.position;
             float distance = direction.magnitude;
             
             float speed = distance > 1f ? bot.moveSpeed : bot.moveSpeed * 0.5f;
             UpdateAnimationSpeed(speed, true);
+        }
+        else
+        {
+            // Rotasyon düzeltmesi sırasında idle animasyon
+            UpdateAnimationSpeed(0f, false);
         }
     }
     
@@ -407,6 +441,25 @@ public class ReturningToPositionState : BotState
             return;
         }
         
+        if (isRotationOnly)
+        {
+            // Sadece rotasyonu düzelt
+            float angleDiff = Quaternion.Angle(transform.rotation, bot.defaultPosition.rotation);
+            
+            if (angleDiff < 5f)
+            {
+                transform.rotation = bot.defaultPosition.rotation;
+                Debug.Log($"{bot.gameObject.name} rotation fixed");
+                bot.ChangeState(new IdleState(bot));
+            }
+            else
+            {
+                transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.deltaTime * 2f);
+            }
+            return;
+        }
+        
+        // Normal hareket
         Vector3 direction = bot.defaultPosition.position - transform.position;
         direction.y = 0;
         
@@ -415,13 +468,14 @@ public class ReturningToPositionState : BotState
         // Hedefe ulaştık mı?
         if (distance < bot.stoppingDistance)
         {
-            // Rotasyonu da düzelt
+            // Pozisyona ulaştık, rotasyonu da düzelt
             transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.deltaTime);
             
             // Rotasyon da tamamsa idle'a geç
             float angleDiff = Quaternion.Angle(transform.rotation, bot.defaultPosition.rotation);
             if (angleDiff < 5f)
             {
+                transform.rotation = bot.defaultPosition.rotation;
                 Debug.Log($"{bot.gameObject.name} reached default position");
                 bot.ChangeState(new IdleState(bot));
             }
@@ -443,6 +497,13 @@ public class ReturningToPositionState : BotState
     public override void Exit()
     {
         bot.isReturningToDefault = false;
-        Debug.Log($"{bot.gameObject.name} stopped returning to default");
+        if (isRotationOnly)
+        {
+            Debug.Log($"{bot.gameObject.name} finished rotation adjustment");
+        }
+        else
+        {
+            Debug.Log($"{bot.gameObject.name} stopped returning to default");
+        }
     }
 }

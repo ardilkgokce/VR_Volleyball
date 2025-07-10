@@ -32,7 +32,7 @@ public class BotController : MonoBehaviour
     public float maxMoveDistance = 20f;
     public float netBoundary = 0.5f;
     public float outOfBoundsLimit = 2f;
-    
+    public float minReturnDistance = 0.5f; 
     [Header("Animation Settings")]
     public BotAnimationController animationController;
     
