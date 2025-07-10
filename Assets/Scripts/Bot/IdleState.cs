@@ -395,11 +395,9 @@ public class HittingState : BotState
     }
 }
 
-// RETURNING TO POSITION STATE - Default pozisyona dönüş
+// RETURNING TO POSITION STATE - Default pozisyona dönüş (rotasyon yok)
 public class ReturningToPositionState : BotState
 {
-    private bool isRotationOnly = false;
-    
     public ReturningToPositionState(BotController bot) : base(bot) { }
     
     public override void Enter()
@@ -415,21 +413,20 @@ public class ReturningToPositionState : BotState
         
         if (distance <= bot.minReturnDistance)
         {
-            // Sadece rotasyon düzeltmesi yap
-            isRotationOnly = true;
-            Debug.Log($"{bot.gameObject.name} only fixing rotation (distance: {distance:F2}m)");
+            // Zaten yakınız, direkt idle'a geç
+            Debug.Log($"{bot.gameObject.name} already close to default position (distance: {distance:F2}m)");
+            bot.ChangeState(new IdleState(bot));
+            return;
         }
-        else
-        {
-            // Normal dönüş
-            bot.isReturningToDefault = true;
-            Debug.Log($"{bot.gameObject.name} returning to default position (distance: {distance:F2}m)");
-        }
+        
+        // Normal dönüş
+        bot.isReturningToDefault = true;
+        Debug.Log($"{bot.gameObject.name} returning to default position (distance: {distance:F2}m)");
     }
     
     public override void Update()
     {
-        if (!isRotationOnly && bot.defaultPosition != null)
+        if (bot.defaultPosition != null)
         {
             // Hareket animasyonu
             Vector3 direction = bot.defaultPosition.position - transform.position;
@@ -438,11 +435,6 @@ public class ReturningToPositionState : BotState
             float speed = distance > 1f ? bot.moveSpeed : bot.moveSpeed * 0.5f;
             UpdateAnimationSpeed(speed, true);
         }
-        else
-        {
-            // Rotasyon düzeltmesi sırasında idle animasyon
-            UpdateAnimationSpeed(0f, false);
-        }
     }
     
     public override void FixedUpdate()
@@ -450,24 +442,6 @@ public class ReturningToPositionState : BotState
         if (bot.defaultPosition == null)
         {
             bot.ChangeState(new IdleState(bot));
-            return;
-        }
-        
-        if (isRotationOnly)
-        {
-            // Sadece rotasyonu düzelt
-            float angleDiff = Quaternion.Angle(transform.rotation, bot.defaultPosition.rotation);
-            
-            if (angleDiff < 5f)
-            {
-                transform.rotation = bot.defaultPosition.rotation;
-                Debug.Log($"{bot.gameObject.name} rotation fixed");
-                bot.ChangeState(new IdleState(bot));
-            }
-            else
-            {
-                transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.fixedDeltaTime * 2f);
-            }
             return;
         }
         
@@ -480,17 +454,9 @@ public class ReturningToPositionState : BotState
         // Hedefe ulaştık mı?
         if (distance < bot.stoppingDistance)
         {
-            // Pozisyona ulaştık, rotasyonu da düzelt
-            transform.rotation = Quaternion.Slerp(transform.rotation, bot.defaultPosition.rotation, bot.rotationSpeed * Time.fixedDeltaTime);
-            
-            // Rotasyon da tamamsa idle'a geç
-            float angleDiff = Quaternion.Angle(transform.rotation, bot.defaultPosition.rotation);
-            if (angleDiff < 5f)
-            {
-                transform.rotation = bot.defaultPosition.rotation;
-                Debug.Log($"{bot.gameObject.name} reached default position");
-                bot.ChangeState(new IdleState(bot));
-            }
+            // Pozisyona ulaştık, direkt idle'a geç (rotasyon düzeltmesi yok)
+            Debug.Log($"{bot.gameObject.name} reached default position");
+            bot.ChangeState(new IdleState(bot));
             return;
         }
         
@@ -498,7 +464,7 @@ public class ReturningToPositionState : BotState
         Vector3 movement = direction.normalized * bot.moveSpeed * Time.fixedDeltaTime;
         transform.position += movement;
         
-        // Rotasyon
+        // Hareket yönüne bak (sadece hareket ederken)
         if (direction != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(direction);
@@ -509,13 +475,6 @@ public class ReturningToPositionState : BotState
     public override void Exit()
     {
         bot.isReturningToDefault = false;
-        if (isRotationOnly)
-        {
-            Debug.Log($"{bot.gameObject.name} finished rotation adjustment");
-        }
-        else
-        {
-            Debug.Log($"{bot.gameObject.name} stopped returning to default");
-        }
+        Debug.Log($"{bot.gameObject.name} stopped returning to default");
     }
 }

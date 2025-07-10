@@ -115,7 +115,7 @@ public class ServiceState : BotState
         }
         
         // 4. Aşama: Vuruş frame'ine kadar bekle
-        float waitTime = hitTime - settings.animationStartDelay;
+        float waitTime = hitTime + settings.animationStartDelay;
         yield return new WaitForSeconds(waitTime);
         
         // 5. Aşama: Vuruşu FixedUpdate'te yapmak için işaretle
