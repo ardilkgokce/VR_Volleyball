@@ -8,8 +8,18 @@ using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
-    [Header("Prefabs")]
-    public GameObject botPrefab;
+    [Header("Bot Prefabs")]
+    [Tooltip("Farklı bot modellerini buraya ekleyin")]
+    public GameObject[] botPrefabVariants;
+    
+    [Header("Team Bot Lists")]
+    [Tooltip("Blue takım için kullanılacak bot prefab'ları")]
+    public List<GameObject> blueTeamBotPrefabs = new List<GameObject>();
+    
+    [Tooltip("Red takım için kullanılacak bot prefab'ları")]
+    public List<GameObject> redTeamBotPrefabs = new List<GameObject>();
+    
+    [Header("Ball Prefab")]
     public GameObject ballPrefab;
     
     [Header("Team Positions")]
@@ -19,6 +29,9 @@ public class GameManager : MonoBehaviour
     [Header("Bot Spawn Settings")]
     [Tooltip("Y pozisyonu offset'i - botların ayaklarının yere değmesi için")]
     public float botGroundOffset = 0.07096839f;
+    
+    [Tooltip("Rastgele bot seçimi yapılsın mı?")]
+    public bool useRandomBotSelection = true;
     
     [Header("VR Player")]
     public Transform vrPlayerPosition;
@@ -87,6 +100,25 @@ public class GameManager : MonoBehaviour
     void Awake()
     {
         instance = this;
+        
+        // Bot listelerini otomatik doldur (eğer boşlarsa)
+        if (blueTeamBotPrefabs.Count == 0 && botPrefabVariants != null && botPrefabVariants.Length > 0)
+        {
+            Debug.Log("Blue team bot list is empty. Using default bot prefab.");
+            for (int i = 0; i < blueTeamPositions.Length; i++)
+            {
+                blueTeamBotPrefabs.Add(botPrefabVariants[0]);
+            }
+        }
+        
+        if (redTeamBotPrefabs.Count == 0 && botPrefabVariants != null && botPrefabVariants.Length > 0)
+        {
+            Debug.Log("Red team bot list is empty. Using default bot prefab.");
+            for (int i = 0; i < redTeamPositions.Length; i++)
+            {
+                redTeamBotPrefabs.Add(botPrefabVariants[0]);
+            }
+        }
     }
     
     void Start()
@@ -154,6 +186,169 @@ public class GameManager : MonoBehaviour
         {
             Debug.LogWarning($"Cannot find GameObject named '{setScoreTextObjectName}' in the scene!");
         }
+    }
+    
+    GameObject GetBotPrefabForPosition(Team team, int positionIndex)
+    {
+        GameObject selectedPrefab = null;
+        
+        if (team == Team.Blue)
+        {
+            if (useRandomBotSelection && botPrefabVariants != null && botPrefabVariants.Length > 0)
+            {
+                // Rastgele seçim
+                selectedPrefab = botPrefabVariants[Random.Range(0, botPrefabVariants.Length)];
+            }
+            else if (positionIndex < blueTeamBotPrefabs.Count && blueTeamBotPrefabs[positionIndex] != null)
+            {
+                // Listeden belirli pozisyon için bot al
+                selectedPrefab = blueTeamBotPrefabs[positionIndex];
+            }
+            else if (blueTeamBotPrefabs.Count > 0)
+            {
+                // Listenin ilk elemanını kullan
+                selectedPrefab = blueTeamBotPrefabs[0];
+            }
+        }
+        else // Team.Red
+        {
+            if (useRandomBotSelection && botPrefabVariants != null && botPrefabVariants.Length > 0)
+            {
+                // Rastgele seçim
+                selectedPrefab = botPrefabVariants[Random.Range(0, botPrefabVariants.Length)];
+            }
+            else if (positionIndex < redTeamBotPrefabs.Count && redTeamBotPrefabs[positionIndex] != null)
+            {
+                // Listeden belirli pozisyon için bot al
+                selectedPrefab = redTeamBotPrefabs[positionIndex];
+            }
+            else if (redTeamBotPrefabs.Count > 0)
+            {
+                // Listenin ilk elemanını kullan
+                selectedPrefab = redTeamBotPrefabs[0];
+            }
+        }
+        
+        // Fallback - eğer hala null ise ve botPrefabVariants varsa ilkini kullan
+        if (selectedPrefab == null && botPrefabVariants != null && botPrefabVariants.Length > 0)
+        {
+            Debug.LogWarning($"No bot prefab found for {team} team position {positionIndex}, using fallback");
+            selectedPrefab = botPrefabVariants[0];
+        }
+        
+        return selectedPrefab;
+    }
+    
+    void SetupGame()
+    {
+        ResetScore();
+        
+        GameObject vrPlayer = GameObject.FindWithTag("Player");
+        bool hasVRPlayer = vrPlayer != null;
+        
+        int blueCount = blueTeamPositions != null ? blueTeamPositions.Length : 0;
+        int redCount = redTeamPositions != null ? redTeamPositions.Length : 0;
+        
+        if (hasVRPlayer)
+        {
+            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null)
+            {
+                if (vrProxy.playerTeam == Team.Blue)
+                {
+                    blueCount = Mathf.Max(0, blueCount - 1);
+                    Debug.Log("Blue takımdan 1 bot eksiltildi - VR Player var");
+                }
+                else
+                {
+                    redCount = Mathf.Max(0, redCount - 1);
+                    Debug.Log("Red takımdan 1 bot eksiltildi - VR Player var");
+                }
+            }
+        }
+        
+        int totalBots = blueCount + redCount;
+        
+        if (totalBots == 0)
+        {
+            Debug.LogError("Takım pozisyonları atanmamış!");
+            return;
+        }
+        
+        bots = new GameObject[totalBots];
+        int botIndex = 0;
+        
+        // Blue takım botlarını oluştur
+        for (int i = 0; i < blueCount; i++)
+        {
+            if (blueTeamPositions[i] != null)
+            {
+                Vector3 position = blueTeamPositions[i].position;
+                // Y pozisyonunu düzelt - ayaklar yere değsin
+                position.y = botGroundOffset;
+                
+                // Bu pozisyon için bot prefab'ını al
+                GameObject botPrefab = GetBotPrefabForPosition(Team.Blue, i);
+                
+                if (botPrefab != null)
+                {
+                    bots[botIndex] = Instantiate(botPrefab, position, blueTeamPositions[i].rotation);
+                    bots[botIndex].name = $"BlueBot{i + 1}_{botPrefab.name}";
+                    bots[botIndex].tag = "Bot";
+                    
+                    BotController controller = bots[botIndex].GetComponent<BotController>();
+                    controller.team = Team.Blue;
+                    
+                    // Default pozisyonu ayarla
+                    controller.SetDefaultPosition(position, blueTeamPositions[i].rotation);
+                    
+                    botIndex++;
+                    
+                    Debug.Log($"Created {bots[botIndex-1].name} at position Y: {position.y}");
+                }
+                else
+                {
+                    Debug.LogError($"No bot prefab available for Blue team position {i}!");
+                }
+            }
+        }
+        
+        // Red takım botlarını oluştur
+        for (int i = 0; i < redCount; i++)
+        {
+            if (redTeamPositions[i] != null)
+            {
+                Vector3 position = redTeamPositions[i].position;
+                // Y pozisyonunu düzelt - ayaklar yere değsin
+                position.y = botGroundOffset;
+                
+                // Bu pozisyon için bot prefab'ını al
+                GameObject botPrefab = GetBotPrefabForPosition(Team.Red, i);
+                
+                if (botPrefab != null)
+                {
+                    bots[botIndex] = Instantiate(botPrefab, position, redTeamPositions[i].rotation);
+                    bots[botIndex].name = $"RedBot{i + 1}_{botPrefab.name}";
+                    bots[botIndex].tag = "Bot";
+                    
+                    BotController controller = bots[botIndex].GetComponent<BotController>();
+                    controller.team = Team.Red;
+                    
+                    // Default pozisyonu ayarla
+                    controller.SetDefaultPosition(position, redTeamPositions[i].rotation);
+                    
+                    botIndex++;
+                    
+                    Debug.Log($"Created {bots[botIndex-1].name} at position Y: {position.y}");
+                }
+                else
+                {
+                    Debug.LogError($"No bot prefab available for Red team position {i}!");
+                }
+            }
+        }
+        
+        StartCoroutine(StartGameAfterPositioning());
     }
     
     public void AddScore(Team scoringTeam, string reason = "")
@@ -531,98 +726,6 @@ public class GameManager : MonoBehaviour
             Debug.Log("Controller button pressed via legacy input");
             RestartScene();
         }
-    }
-    
-    void SetupGame()
-    {
-        ResetScore();
-        
-        GameObject vrPlayer = GameObject.FindWithTag("Player");
-        bool hasVRPlayer = vrPlayer != null;
-        
-        int blueCount = blueTeamPositions != null ? blueTeamPositions.Length : 0;
-        int redCount = redTeamPositions != null ? redTeamPositions.Length : 0;
-        
-        if (hasVRPlayer)
-        {
-            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
-            if (vrProxy != null)
-            {
-                if (vrProxy.playerTeam == Team.Blue)
-                {
-                    blueCount = Mathf.Max(0, blueCount - 1);
-                    Debug.Log("Blue takımdan 1 bot eksiltildi - VR Player var");
-                }
-                else
-                {
-                    redCount = Mathf.Max(0, redCount - 1);
-                    Debug.Log("Red takımdan 1 bot eksiltildi - VR Player var");
-                }
-            }
-        }
-        
-        int totalBots = blueCount + redCount;
-        
-        if (totalBots == 0)
-        {
-            Debug.LogError("Takım pozisyonları atanmamış!");
-            return;
-        }
-        
-        bots = new GameObject[totalBots];
-        int botIndex = 0;
-        
-        // Blue takım botlarını oluştur
-        for (int i = 0; i < blueCount; i++)
-        {
-            if (blueTeamPositions[i] != null)
-            {
-                Vector3 position = blueTeamPositions[i].position;
-                // Y pozisyonunu düzelt - ayaklar yere değsin
-                position.y = botGroundOffset;
-                
-                bots[botIndex] = Instantiate(botPrefab, position, blueTeamPositions[i].rotation);
-                bots[botIndex].name = $"BlueBot{i + 1}";
-                bots[botIndex].tag = "Bot";
-                
-                BotController controller = bots[botIndex].GetComponent<BotController>();
-                controller.team = Team.Blue;
-                
-                // Default pozisyonu ayarla
-                controller.SetDefaultPosition(position, blueTeamPositions[i].rotation);
-                
-                botIndex++;
-                
-                Debug.Log($"Created {bots[botIndex-1].name} at position Y: {position.y}");
-            }
-        }
-        
-        // Red takım botlarını oluştur
-        for (int i = 0; i < redCount; i++)
-        {
-            if (redTeamPositions[i] != null)
-            {
-                Vector3 position = redTeamPositions[i].position;
-                // Y pozisyonunu düzelt - ayaklar yere değsin
-                position.y = botGroundOffset;
-                
-                bots[botIndex] = Instantiate(botPrefab, position, redTeamPositions[i].rotation);
-                bots[botIndex].name = $"RedBot{i + 1}";
-                bots[botIndex].tag = "Bot";
-                
-                BotController controller = bots[botIndex].GetComponent<BotController>();
-                controller.team = Team.Red;
-                
-                // Default pozisyonu ayarla
-                controller.SetDefaultPosition(position, redTeamPositions[i].rotation);
-                
-                botIndex++;
-                
-                Debug.Log($"Created {bots[botIndex-1].name} at position Y: {position.y}");
-            }
-        }
-        
-        StartCoroutine(StartGameAfterPositioning());
     }
     
     IEnumerator StartGameAfterPositioning()

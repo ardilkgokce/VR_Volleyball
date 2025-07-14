@@ -18,7 +18,6 @@ public class VolleyballCourtManager : MonoBehaviour
     [Header("Game References")]
     public GameObject botPrefab;
     public GameObject ballPrefab;
-    public GameManager gameManager;
     
     [Header("Debug Settings")]
     public bool showDebugGizmos = true;
@@ -53,7 +52,6 @@ public class VolleyballCourtManager : MonoBehaviour
     
     void Start()
     {
-        SetupGameManager();
         
         // Renderer referanslarını bul
         CacheRendererReferences();
@@ -278,33 +276,6 @@ public class VolleyballCourtManager : MonoBehaviour
         
         // Layer'ı Boundary olarak ayarla (opsiyonel)
         wall.layer = LayerMask.NameToLayer("Default");
-    }
-    
-    void SetupGameManager()
-    {
-        // GameManager yoksa oluştur
-        if (gameManager == null)
-        {
-            GameObject gmObject = GameObject.Find("GameManager");
-            if (gmObject == null)
-            {
-                gmObject = new GameObject("GameManager");
-                gameManager = gmObject.AddComponent<GameManager>();
-            }
-            else
-            {
-                gameManager = gmObject.GetComponent<GameManager>();
-            }
-        }
-        
-        // GameManager ayarları
-        if (gameManager != null)
-        {
-            gameManager.botPrefab = botPrefab;
-            gameManager.ballPrefab = ballPrefab;
-            // gameManager.botCount = 6; // BU SATIRI KALDIRIYORUM - Inspector'daki değeri kullan
-            // gameManager.botDistance = 6f; // BU SATIRI DA KALDIRIYORUM
-        }
     }
     
     // Debug gizmos'ları kontrol eden metod
