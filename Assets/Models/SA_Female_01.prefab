@@ -327,14 +327,16 @@ MonoBehaviour:
   hitPointTriggerDistance: 1.4
   throwForce: 15
   throwHeight: 5
+  redTeamCatchDelay: 0.3
   moveSpeed: 4
-  runSpeed: 6
+  runSpeed: 4
   stoppingDistance: 0.5
   enableMovement: 1
   maxMoveDistance: 20
   netBoundary: 0.5
-  outOfBoundsLimit: 2
+  outOfBoundsLimit: 5
   minReturnDistance: 0.5
+  outBallCatchTolerance: 1.5
   animationController: {fileID: 1037266632923213441}
   hitPoint: {fileID: 2250811585976268872}
   defaultPosition: {fileID: 0}

@@ -404,6 +404,9 @@ public class GameManager : MonoBehaviour
         // Sayı sesi çal
         PlaySound(scoreSound);
         
+        // Sayı olduğunda tüm botları default pozisyonlarına gönder
+        ReturnAllBotsToDefaultPosition();
+        
         servingTeam = scoringTeam;
         
         UpdateScoreUI();
@@ -876,5 +879,26 @@ public class GameManager : MonoBehaviour
         {
             audioSource.PlayOneShot(clip);
         }
+    }
+    
+    // Tüm botları default pozisyonlarına gönder
+    void ReturnAllBotsToDefaultPosition()
+    {
+        if (bots == null) return;
+        
+        foreach (GameObject bot in bots)
+        {
+            if (bot != null)
+            {
+                BotController controller = bot.GetComponent<BotController>();
+                if (controller != null)
+                {
+                    // Bot'u default pozisyonuna gönder
+                    controller.ForceReturnToDefault();
+                }
+            }
+        }
+        
+        Debug.Log("All bots returning to default positions after score");
     }
 }
