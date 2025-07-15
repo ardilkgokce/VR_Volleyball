@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 7173978341660905625}
   - component: {fileID: 5360692046133755906}
   m_Layer: 0
-  m_Name: VolleyballBall
+  m_Name: VolleyballBall 1
   m_TagString: Ball
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -67,7 +67,7 @@ SphereCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 46607176769805779}
-  m_Material: {fileID: 13400000, guid: fbb72a3f8e78ac24b9a5d2b7339cd0a9, type: 2}
+  m_Material: {fileID: 13400000, guid: cf738cf1fcab7994e8de5d1753f3770c, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0

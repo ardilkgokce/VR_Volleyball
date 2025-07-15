@@ -4648,7 +4648,7 @@ MonoBehaviour:
   redTeamBotPrefabs:
   - {fileID: 7151281685371568613, guid: 12a352d404336ef4889bed440b79b164, type: 3}
   - {fileID: 737407633335771953, guid: 354410fe9d06df444ab9e34a1856f9fd, type: 3}
-  ballPrefab: {fileID: 46607176769805779, guid: 397f1ea359db372469e65d56f33072a0,
+  ballPrefab: {fileID: 46607176769805779, guid: a99657885dc70bc47bf5e3e9b84568d0,
     type: 3}
   blueTeamPositions:
   - {fileID: 351751917}
@@ -8576,7 +8576,7 @@ MonoBehaviour:
   redSideMaterial: {fileID: 2100000, guid: e00a971db43a58244893eb689f405548, type: 2}
   botPrefab: {fileID: 7966544868111024421, guid: 7f8406b041c893143badc7fcaea84a93,
     type: 3}
-  ballPrefab: {fileID: 46607176769805779, guid: 397f1ea359db372469e65d56f33072a0,
+  ballPrefab: {fileID: 46607176769805779, guid: a99657885dc70bc47bf5e3e9b84568d0,
     type: 3}
   showDebugGizmos: 0
   showCourtBounds: 0
@@ -13428,7 +13428,7 @@ Transform:
   m_GameObject: {fileID: 1549165572609679}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 0.70710707, z: -0, w: 0.7071065}
-  m_LocalPosition: {x: -0.0149842, y: 0, z: -0.0729981}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
