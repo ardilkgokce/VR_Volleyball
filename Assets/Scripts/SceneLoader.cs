@@ -26,4 +26,9 @@ public class SceneLoader : MonoBehaviour
     {
         SceneManager.LoadScene("Indoor");
     }
+
+    public void OpenOutdoorScene()
+    {
+        SceneManager.LoadScene("Outdoor");
+    }
 }

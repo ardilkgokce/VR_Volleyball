@@ -785,22 +785,22 @@ public class GameManager : MonoBehaviour
         }
     }
     
-    void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.R))
-        {
-            RestartGame();
-        }
-        
-        if (Input.GetKeyDown(KeyCode.JoystickButton0) || 
-            Input.GetKeyDown(KeyCode.JoystickButton1) || 
-            Input.GetKeyDown(KeyCode.JoystickButton2) || 
-            Input.GetKeyDown(KeyCode.JoystickButton3))
-        {
-            Debug.Log("Controller button pressed via legacy input");
-            RestartScene();
-        }
-    }
+    // void Update()
+    // {
+    //     if (Input.GetKeyDown(KeyCode.R))
+    //     {
+    //         RestartGame();
+    //     }
+    //     
+    //     if (Input.GetKeyDown(KeyCode.JoystickButton0) || 
+    //         Input.GetKeyDown(KeyCode.JoystickButton1) || 
+    //         Input.GetKeyDown(KeyCode.JoystickButton2) || 
+    //         Input.GetKeyDown(KeyCode.JoystickButton3))
+    //     {
+    //         Debug.Log("Controller button pressed via legacy input");
+    //         RestartScene();
+    //     }
+    // }
     
     IEnumerator StartGameAfterPositioning()
     {
