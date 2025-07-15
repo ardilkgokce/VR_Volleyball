@@ -11,6 +11,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Beach.unity
     guid: 6b6c752fc7416914c92e42e1c4dbe843
+  - enabled: 1
+    path: Assets/Scenes/Indoor.unity
+    guid: 9ae8bcff9242573408c3cbec2b661ac7
   m_configObjects:
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 0acd94c6308fb0d41ac09ed6e65c5841,
       type: 2}
