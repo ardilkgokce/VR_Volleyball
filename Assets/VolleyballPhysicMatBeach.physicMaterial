@@ -7,8 +7,8 @@ PhysicMaterial:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: VolleyballPhysicMatBeach
-  dynamicFriction: 0.7
-  staticFriction: 0.4
-  bounciness: 0.65
-  frictionCombine: 2
-  bounceCombine: 0
+  dynamicFriction: 0.9
+  staticFriction: 0.8
+  bounciness: 0.1
+  frictionCombine: 3
+  bounceCombine: 1
