@@ -540,6 +540,16 @@ PrefabInstance:
       propertyPath: m_Name
       value: Arena
       objectReference: {fileID: 0}
+    - target: {fileID: 5765483666186160155, guid: 6d698f073452d7c4ea623b3f093121c4,
+        type: 3}
+      propertyPath: m_Layer
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 5765483666186160155, guid: 6d698f073452d7c4ea623b3f093121c4,
+        type: 3}
+      propertyPath: m_TagString
+      value: Ground
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -6411,6 +6421,16 @@ PrefabInstance:
       propertyPath: m_Name
       value: Carpet
       objectReference: {fileID: 0}
+    - target: {fileID: 4515672310084802894, guid: 5c831b0e7b25ed64099d813c7f0bdc33,
+        type: 3}
+      propertyPath: m_Layer
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 4515672310084802894, guid: 5c831b0e7b25ed64099d813c7f0bdc33,
+        type: 3}
+      propertyPath: m_TagString
+      value: Ground
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -8547,7 +8567,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   courtLength: 18
   courtWidth: 9
-  netHeight: 2.43
+  netHeight: 2.26
   lineWidth: 0.05
   courtMaterial: {fileID: 2100000, guid: e00a971db43a58244893eb689f405548, type: 2}
   lineMaterial: {fileID: 2100000, guid: 9f69f9c778025314689745c0e6cbe0e8, type: 2}
@@ -13572,6 +13592,7 @@ SceneRoots:
   - {fileID: 4074173942103663}
   - {fileID: 418732453}
   - {fileID: 707881937}
+  - {fileID: 1418806158}
   - {fileID: 2054127163}
   - {fileID: 105325609}
   - {fileID: 367553734}
@@ -13579,6 +13600,5 @@ SceneRoots:
   - {fileID: 1486131606}
   - {fileID: 1131282282}
   - {fileID: 1839349446}
-  - {fileID: 1418806158}
   - {fileID: 1750799576}
   - {fileID: 1448427692}
