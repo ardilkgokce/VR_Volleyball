@@ -146,15 +146,6 @@ public class VolleyballBall : MonoBehaviour
         UpdateBallColor();
         PlayHitSound();
         
-        if (currentTeamHits == maxHitsPerTeam)
-        {
-            Debug.LogWarning($"{currentTeam} team must pass to other side! Last hit!");
-            if (warningSound != null && audioSource != null)
-            {
-                audioSource.PlayOneShot(warningSound);
-            }
-        }
-        
         return true;
     }
     
@@ -374,7 +365,6 @@ public class VolleyballBall : MonoBehaviour
     {
         if (hitSound != null && audioSource != null)
         {
-            audioSource.pitch = 1f + (currentTeamHits - 1) * 0.1f;
             audioSource.PlayOneShot(hitSound);
         }
     }

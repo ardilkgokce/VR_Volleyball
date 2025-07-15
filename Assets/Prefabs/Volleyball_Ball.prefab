@@ -154,7 +154,7 @@ MonoBehaviour:
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   warningColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   criticalColor: {r: 1, g: 0, b: 0, a: 1}
-  hitSound: {fileID: 8300000, guid: 16fba6d30ed741d4a9fdd6e79ee2f3ac, type: 3}
+  hitSound: {fileID: 8300000, guid: 8729d97fc6a67a5409288fe59c1df3a5, type: 3}
   warningSound: {fileID: 0}
-  dropZoneText: {fileID: 0}
+  dropZoneTextObjectName: DropZoneText
   uiDisplayDuration: 10

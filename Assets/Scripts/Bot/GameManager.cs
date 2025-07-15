@@ -59,12 +59,32 @@ public class GameManager : MonoBehaviour
     private TextMeshProUGUI gameStatusText;
     private TextMeshProUGUI setScoreText;
     
+    [Header("Audio System")]
+    [Tooltip("Oyun başlangıç düdüğü")]
+    public AudioClip gameStartWhistle;
+    [Tooltip("Oyun bitiş düdüğü")]
+    public AudioClip gameEndWhistle;
+    [Tooltip("Sayı kazanma sesi")]
+    public AudioClip scoreSound;
+    [Tooltip("Set kazanma sesi")]
+    public AudioClip setWinSound;
+    [Tooltip("Maç kazanma sesi")]
+    public AudioClip matchWinSound;
+    private AudioSource audioSource;
+    
+    [Header("Scene Management")]
+    [Tooltip("Oyun bittiğinde dönülecek sahne adı")]
+    public string mainMenuSceneName = "MainMenu";
+    [Tooltip("Ana menüye dönmeden önceki bekleme süresi")]
+    public float returnToMenuDelay = 5f;
+    
     [Header("Game State")]
     public bool isGameActive = true;
     private bool isRallyActive = true;
     private bool isMatchActive = true; // Maç devam ediyor mu
     private Team servingTeam = Team.Blue;
     private Team lastSetWinner = Team.Blue; // Son seti kazanan takım
+    private bool isFirstRally = true; // İlk rally kontrolü için
     
     [Header("XRI Input Actions")]
     [SerializeField] private InputActionAsset xriInputActions;
@@ -100,6 +120,13 @@ public class GameManager : MonoBehaviour
     void Awake()
     {
         instance = this;
+        
+        // Audio Source ekle
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
         
         // Bot listelerini otomatik doldur (eğer boşlarsa)
         if (blueTeamBotPrefabs.Count == 0 && botPrefabVariants != null && botPrefabVariants.Length > 0)
@@ -242,6 +269,7 @@ public class GameManager : MonoBehaviour
     void SetupGame()
     {
         ResetScore();
+        isFirstRally = true;
         
         GameObject vrPlayer = GameObject.FindWithTag("Player");
         bool hasVRPlayer = vrPlayer != null;
@@ -373,6 +401,9 @@ public class GameManager : MonoBehaviour
             Debug.Log($"Blue team scores! Reason: {reason}. Score: {redTeamScore}-{blueTeamScore}");
         }
         
+        // Sayı sesi çal
+        PlaySound(scoreSound);
+        
         servingTeam = scoringTeam;
         
         UpdateScoreUI();
@@ -443,6 +474,9 @@ public class GameManager : MonoBehaviour
             isGameActive = false;
             lastSetWinner = setWinner;
             
+            // Set kazanma sesi
+            PlaySound(setWinSound);
+            
             Debug.Log($"SET {currentSet} ENDED! {setWinner} team wins! Set score: RED {redTeamScore} - BLUE {blueTeamScore}");
             Debug.Log($"Total Sets - RED: {redTeamSets}, BLUE: {blueTeamSets}");
             
@@ -466,11 +500,38 @@ public class GameManager : MonoBehaviour
             isMatchActive = false;
             Team matchWinner = redTeamSets >= setsToWin ? Team.Red : Team.Blue;
             
+            // Maç bitme sesi
+            PlaySound(matchWinSound);
+            
             ShowMatchEndUI(matchWinner);
             
             OnMatchEnded?.Invoke(matchWinner, redTeamSets, blueTeamSets);
             
             Debug.Log($"MATCH OVER! {matchWinner} team wins! Final set score: RED {redTeamSets} - BLUE {blueTeamSets}");
+            
+            // Ana menüye dönüş
+            StartCoroutine(ReturnToMainMenu());
+        }
+    }
+    
+    IEnumerator ReturnToMainMenu()
+    {
+        // Oyun bitiş düdüğü
+        yield return new WaitForSeconds(1f); // Kısa bir bekleme
+        PlaySound(gameEndWhistle);
+        
+        // Belirlenen süre kadar bekle
+        yield return new WaitForSeconds(returnToMenuDelay);
+        
+        // Ana menüye dön
+        if (!string.IsNullOrEmpty(mainMenuSceneName))
+        {
+            Debug.Log($"Returning to main menu: {mainMenuSceneName}");
+            SceneManager.LoadScene(mainMenuSceneName);
+        }
+        else
+        {
+            Debug.LogWarning("Main menu scene name is not set! Cannot return to menu.");
         }
     }
     
@@ -503,6 +564,7 @@ public class GameManager : MonoBehaviour
         currentSet++;
         redTeamScore = 0;
         blueTeamScore = 0;
+        isFirstRally = true;
         
         // Servis atan takım son seti kaybeden takım olur
         servingTeam = lastSetWinner == Team.Red ? Team.Blue : Team.Red;
@@ -529,7 +591,7 @@ public class GameManager : MonoBehaviour
             gameStatusText.text = $"<size=150%><b>MAÇ BİTTİ!</b></size>\n" +
                                  $"<size=120%><color={winnerColor}>{winnerName} KAZANDI!</color></size>\n" +
                                  $"<size=100%>Set Skoru: {redTeamSets} - {blueTeamSets}</size>\n" +
-                                 $"<size=80%>Yeniden başlatmak için R tuşuna basın</size>";
+                                 $"<size=80%>{returnToMenuDelay} saniye sonra ana menüye dönülecek...</size>";
         }
     }
     
@@ -544,6 +606,14 @@ public class GameManager : MonoBehaviour
         
         isRallyActive = true;
         Debug.Log("New rally starting - scoring enabled");
+        
+        // İlk rally ise başlangıç düdüğünü çal
+        if (isFirstRally)
+        {
+            isFirstRally = false;
+            PlaySound(gameStartWhistle);
+            yield return new WaitForSeconds(0.5f); // Düdük sesinden sonra kısa bekleme
+        }
         
         Transform server = GetServerForTeam(servingTeam);
         
@@ -639,6 +709,7 @@ public class GameManager : MonoBehaviour
         isGameActive = true;
         isRallyActive = true;
         isMatchActive = true;
+        isFirstRally = true;
         
         UpdateScoreUI();
         UpdateSetScoreUI();
@@ -796,5 +867,14 @@ public class GameManager : MonoBehaviour
     {
         isRallyActive = false;
         Debug.Log("Rally manually ended");
+    }
+    
+    // Ses çalma metodu
+    void PlaySound(AudioClip clip)
+    {
+        if (audioSource != null && clip != null)
+        {
+            audioSource.PlayOneShot(clip);
+        }
     }
 }
