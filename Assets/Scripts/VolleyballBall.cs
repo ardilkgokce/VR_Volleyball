@@ -26,10 +26,8 @@ public class VolleyballBall : MonoBehaviour
     private AudioSource audioSource;
     
     [Header("UI Settings")]
-    public string dropZoneTextObjectName = "DropZoneText"; // GameObject adı
     public float uiDisplayDuration = 3f; // UI'ın ekranda kalma süresi
     private float uiTimer = 0f;
-    private TextMeshProUGUI dropZoneText; // TextMeshPro referansı
     
     // Court manager referansı
     private VolleyballCourtManager courtManager;
@@ -77,39 +75,6 @@ public class VolleyballBall : MonoBehaviour
         {
             Debug.LogWarning("VolleyballCourtManager not found! Drop zone detection may not work properly.");
         }
-        
-        // UI TextMeshPro'yu GameObject adına göre bul
-        GameObject dropZoneObject = GameObject.Find("DropZoneText");
-        if (dropZoneObject != null)
-        {
-            dropZoneText = dropZoneObject.GetComponent<TextMeshProUGUI>();
-            if (dropZoneText == null)
-            {
-                Debug.LogError($"GameObject '{dropZoneTextObjectName}' found but doesn't have TextMeshProUGUI component!");
-            }
-            else
-            {
-                Debug.Log($"DropZoneText UI successfully found and connected!");
-                dropZoneText.gameObject.SetActive(false); // Başlangıçta gizle
-            }
-        }
-        else
-        {
-            Debug.LogError($"Cannot find GameObject named '{dropZoneTextObjectName}' in the scene!");
-        }
-    }
-    
-    void Update()
-    {
-        // UI timer güncelleme
-        if (uiTimer > 0)
-        {
-            uiTimer -= Time.deltaTime;
-            if (uiTimer <= 0 && dropZoneText != null)
-            {
-                dropZoneText.gameObject.SetActive(false);
-            }
-        }
     }
     
     public bool OnHit(Transform hitter, Team hitterTeam)
@@ -153,9 +118,6 @@ public class VolleyballBall : MonoBehaviour
     {
         // Düşme bölgesini belirle
         DropZone zone = DetermineDropZone(dropPosition);
-        
-        // UI'ı güncelle
-        UpdateDropZoneUI(zone, dropPosition);
         
         // Skor veren takımı belirle
         Team scoringTeam = GetScoringTeam(zone);
@@ -226,36 +188,7 @@ public class VolleyballBall : MonoBehaviour
     }
     
     // UI'ı güncelle
-    private void UpdateDropZoneUI(DropZone zone, Vector3 dropPosition)
-    {
-        if (dropZoneText == null)
-        {
-            Debug.LogWarning("DropZoneText is null, cannot update UI!");
-            return;
-        }
-        
-        // UI metnini oluştur
-        string zoneText = GetZoneDisplayText(zone);
-        Team scoringTeam = GetScoringTeam(zone);
-        string teamColorHex = scoringTeam == Team.Blue ? "#0080FF" : "#FF4444";
-        string scoringTeamName = scoringTeam.ToString();
-        
-        // Koordinat bilgisi
-        string coordText = $"X: {dropPosition.x:F1}, Z: {dropPosition.z:F1}";
-        
-        // UI metnini ayarla - TextMeshPro rich text formatı
-        dropZoneText.text = $"<size=120%><b>TOP DÜŞTÜ!</b></size>\n" +
-                           $"<size=100%>{zoneText}</size>\n" +
-                           $"<size=80%>{coordText}</size>\n" +
-                           $"<size=110%><color={teamColorHex}><b>{scoringTeamName} SKOR!</b></color></size>";
-        
-        // UI'ı aktif et ve timer'ı başlat
-        dropZoneText.gameObject.SetActive(true);
-        uiTimer = uiDisplayDuration;
-        
-        // Opsiyonel: UI rengini ayarla
-        UpdateUIColor(zone);
-    }
+    
     
     // Bölge adını döndür
     private string GetZoneDisplayText(DropZone zone)
@@ -274,29 +207,7 @@ public class VolleyballBall : MonoBehaviour
                 return "Bilinmeyen Bölge";
         }
     }
-    
-    // UI arka plan rengini güncelle
-    private void UpdateUIColor(DropZone zone)
-    {
-        if (dropZoneText == null) return;
-        
-        // TextMeshPro'nun parent'ındaki Image component'ini bul
-        UnityEngine.UI.Image backgroundImage = dropZoneText.GetComponentInParent<UnityEngine.UI.Image>();
-        if (backgroundImage == null) return;
-        
-        // Saha içi/dışı'na göre renk
-        switch (zone)
-        {
-            case DropZone.RedCourtInside:
-            case DropZone.BlueCourtInside:
-                backgroundImage.color = new Color(0, 1, 0, 0.8f); // Yeşil (saha içi)
-                break;
-            case DropZone.RedCourtOutside:
-            case DropZone.BlueCourtOutside:
-                backgroundImage.color = new Color(1, 0, 0, 0.8f); // Kırmızı (saha dışı)
-                break;
-        }
-    }
+ 
     
     // Skor sebebini döndür
     private string GetScoreReason(DropZone zone)

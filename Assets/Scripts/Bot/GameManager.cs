@@ -51,13 +51,34 @@ public class GameManager : MonoBehaviour
     public int totalSets = 5; // Best of 5
     public int setsToWin = 3; // 3 set kazanmak gerekiyor
     
-    [Header("Score UI")]
-    public string scoreTextObjectName = "ScoreText";
-    public string gameStatusTextObjectName = "GameStatusText";
-    public string setScoreTextObjectName = "SetScoreText"; // Set skoru için yeni UI
-    private TextMeshProUGUI scoreText;
-    private TextMeshProUGUI gameStatusText;
-    private TextMeshProUGUI setScoreText;
+    [Header("UI Elements")]
+    [Tooltip("Blue takım skor text'i")]
+    public TextMeshProUGUI blueTeamScoreText;
+    
+    [Tooltip("Blue takım set text'i")]
+    public TextMeshProUGUI blueTeamSetText;
+    
+    [Tooltip("Red takım skor text'i")]
+    public TextMeshProUGUI redTeamScoreText;
+    
+    [Tooltip("Red takım set text'i")]
+    public TextMeshProUGUI redTeamSetText;
+    
+    [Tooltip("Oyun durumu text'i (set/maç sonu mesajları için)")]
+    public TextMeshProUGUI gameStatusText;
+    
+    [Tooltip("Mevcut set numarası text'i")]
+    public TextMeshProUGUI currentSetText;
+    
+    [Tooltip("Servis atan takım text'i")]
+    public TextMeshProUGUI servingTeamText;
+    
+    [Header("Win Panels")]
+    [Tooltip("Blue takım kazandığında gösterilecek panel")]
+    public GameObject blueWinPanel;
+    
+    [Tooltip("Red takım kazandığında gösterilecek panel")]
+    public GameObject redWinPanel;
     
     [Header("Audio System")]
     [Tooltip("Oyun başlangıç düdüğü")]
@@ -150,7 +171,7 @@ public class GameManager : MonoBehaviour
     
     void Start()
     {
-        FindUIElements();
+        ValidateUIElements();
         
         if (xriInputActions == null)
         {
@@ -173,46 +194,45 @@ public class GameManager : MonoBehaviour
         SetupInputActions();
         SetupGame();
         
-        UpdateScoreUI();
-        UpdateSetScoreUI();
+        UpdateAllUI();
     }
     
-    void FindUIElements()
+    void ValidateUIElements()
     {
-        GameObject scoreObject = GameObject.Find(scoreTextObjectName);
-        if (scoreObject != null)
-        {
-            scoreText = scoreObject.GetComponent<TextMeshProUGUI>();
-            if (scoreText == null)
-            {
-                Debug.LogError($"GameObject '{scoreTextObjectName}' found but doesn't have TextMeshProUGUI component!");
-            }
-        }
-        else
-        {
-            Debug.LogWarning($"Cannot find GameObject named '{scoreTextObjectName}' in the scene!");
-        }
+        // UI elementlerinin atanıp atanmadığını kontrol et
+        if (blueTeamScoreText == null)
+            Debug.LogWarning("Blue Team Score Text is not assigned!");
         
-        GameObject statusObject = GameObject.Find(gameStatusTextObjectName);
-        if (statusObject != null)
-        {
-            gameStatusText = statusObject.GetComponent<TextMeshProUGUI>();
-            if (gameStatusText != null)
-            {
-                gameStatusText.gameObject.SetActive(false);
-            }
-        }
+        if (blueTeamSetText == null)
+            Debug.LogWarning("Blue Team Set Text is not assigned!");
+            
+        if (redTeamScoreText == null)
+            Debug.LogWarning("Red Team Score Text is not assigned!");
+            
+        if (redTeamSetText == null)
+            Debug.LogWarning("Red Team Set Text is not assigned!");
+            
+        if (gameStatusText == null)
+            Debug.LogWarning("Game Status Text is not assigned!");
+            
+        if (currentSetText == null)
+            Debug.LogWarning("Current Set Text is not assigned!");
+            
+        if (servingTeamText == null)
+            Debug.LogWarning("Serving Team Text is not assigned!");
+            
+        if (blueWinPanel == null)
+            Debug.LogWarning("Blue Win Panel is not assigned!");
+            
+        if (redWinPanel == null)
+            Debug.LogWarning("Red Win Panel is not assigned!");
         
-        // Set skoru UI'ını bul
-        GameObject setScoreObject = GameObject.Find(setScoreTextObjectName);
-        if (setScoreObject != null)
-        {
-            setScoreText = setScoreObject.GetComponent<TextMeshProUGUI>();
-        }
-        else
-        {
-            Debug.LogWarning($"Cannot find GameObject named '{setScoreTextObjectName}' in the scene!");
-        }
+        // Win panellerini başlangıçta kapat
+        if (blueWinPanel != null)
+            blueWinPanel.SetActive(false);
+            
+        if (redWinPanel != null)
+            redWinPanel.SetActive(false);
     }
     
     GameObject GetBotPrefabForPosition(Team team, int positionIndex)
@@ -421,32 +441,56 @@ public class GameManager : MonoBehaviour
         }
     }
     
+    void UpdateAllUI()
+    {
+        UpdateScoreUI();
+        UpdateSetUI();
+        UpdateGameInfoUI();
+    }
+    
     void UpdateScoreUI()
     {
-        if (scoreText != null)
+        // Blue takım skorunu güncelle
+        if (blueTeamScoreText != null)
         {
-            string redColor = "#FF4444";
-            string blueColor = "#0080FF";
-            
-            // 5. set mi kontrol et
-            int targetScore = (currentSet == 5) ? finalSetWinningScore : winningScore;
-            
-            scoreText.text = $"<size=120%><color={redColor}>RED: {redTeamScore}</color> - <color={blueColor}>BLUE: {blueTeamScore}</color></size>\n" +
-                            $"<size=80%>Set {currentSet} - İlk {targetScore} (Min +{minimumDifference})</size>\n" +
-                            $"<size=70%>Servis: {(servingTeam == Team.Red ? "KIRMIZI" : "MAVİ")}</size>";
+            blueTeamScoreText.text = blueTeamScore.ToString();
+        }
+        
+        // Red takım skorunu güncelle
+        if (redTeamScoreText != null)
+        {
+            redTeamScoreText.text = redTeamScore.ToString();
         }
     }
     
-    void UpdateSetScoreUI()
+    void UpdateSetUI()
     {
-        if (setScoreText != null)
+        // Blue takım set skorunu güncelle
+        if (blueTeamSetText != null)
         {
-            string redColor = "#FF4444";
-            string blueColor = "#0080FF";
-            
-            setScoreText.text = $"<size=150%><b>SET SKORU</b></size>\n" +
-                               $"<size=120%><color={redColor}>RED: {redTeamSets}</color> - <color={blueColor}>BLUE: {blueTeamSets}</color></size>\n" +
-                               $"<size=80%>İlk {setsToWin} set kazanan</size>";
+            blueTeamSetText.text = blueTeamSets.ToString();
+        }
+        
+        // Red takım set skorunu güncelle
+        if (redTeamSetText != null)
+        {
+            redTeamSetText.text = redTeamSets.ToString();
+        }
+    }
+    
+    void UpdateGameInfoUI()
+    {
+        // Mevcut set numarasını güncelle
+        if (currentSetText != null)
+        {
+            int targetScore = (currentSet == 5) ? finalSetWinningScore : winningScore;
+            currentSetText.text = $"Set {currentSet} - İlk {targetScore}";
+        }
+        
+        // Servis atan takımı güncelle
+        if (servingTeamText != null)
+        {
+            servingTeamText.text = $"Servis: {(servingTeam == Team.Red ? "KIRMIZI" : "MAVİ")}";
         }
     }
     
@@ -482,6 +526,8 @@ public class GameManager : MonoBehaviour
             
             Debug.Log($"SET {currentSet} ENDED! {setWinner} team wins! Set score: RED {redTeamScore} - BLUE {blueTeamScore}");
             Debug.Log($"Total Sets - RED: {redTeamSets}, BLUE: {blueTeamSets}");
+            
+            UpdateSetUI();
             
             OnSetEnded?.Invoke(setWinner, currentSet);
             
@@ -575,8 +621,7 @@ public class GameManager : MonoBehaviour
         isGameActive = true;
         isRallyActive = true;
         
-        UpdateScoreUI();
-        UpdateSetScoreUI();
+        UpdateAllUI();
         
         // Yeni rally başlat
         StartCoroutine(StartNewRally(servingTeam));
@@ -584,17 +629,36 @@ public class GameManager : MonoBehaviour
     
     void ShowMatchEndUI(Team winner)
     {
+        // Game status text'i kapat (artık gerekli değil)
         if (gameStatusText != null)
         {
-            gameStatusText.gameObject.SetActive(true);
-            
-            string winnerColor = winner == Team.Red ? "#FF4444" : "#0080FF";
-            string winnerName = winner.ToString().ToUpper();
-            
-            gameStatusText.text = $"<size=150%><b>MAÇ BİTTİ!</b></size>\n" +
-                                 $"<size=120%><color={winnerColor}>{winnerName} KAZANDI!</color></size>\n" +
-                                 $"<size=100%>Set Skoru: {redTeamSets} - {blueTeamSets}</size>\n" +
-                                 $"<size=80%>{returnToMenuDelay} saniye sonra ana menüye dönülecek...</size>";
+            gameStatusText.gameObject.SetActive(false);
+        }
+        
+        // Kazanan takımın panelini göster
+        if (winner == Team.Blue)
+        {
+            if (blueWinPanel != null)
+            {
+                blueWinPanel.SetActive(true);
+                Debug.Log("Blue team win panel activated!");
+            }
+            else
+            {
+                Debug.LogWarning("Blue Win Panel is not assigned!");
+            }
+        }
+        else // Team.Red
+        {
+            if (redWinPanel != null)
+            {
+                redWinPanel.SetActive(true);
+                Debug.Log("Red team win panel activated!");
+            }
+            else
+            {
+                Debug.LogWarning("Red Win Panel is not assigned!");
+            }
         }
     }
     
@@ -714,13 +778,19 @@ public class GameManager : MonoBehaviour
         isMatchActive = true;
         isFirstRally = true;
         
-        UpdateScoreUI();
-        UpdateSetScoreUI();
+        UpdateAllUI();
         
         if (gameStatusText != null)
         {
             gameStatusText.gameObject.SetActive(false);
         }
+        
+        // Win panellerini kapat
+        if (blueWinPanel != null)
+            blueWinPanel.SetActive(false);
+            
+        if (redWinPanel != null)
+            redWinPanel.SetActive(false);
     }
     
     void SetupInputActions()
@@ -784,23 +854,6 @@ public class GameManager : MonoBehaviour
             RestartScene();
         }
     }
-    
-    // void Update()
-    // {
-    //     if (Input.GetKeyDown(KeyCode.R))
-    //     {
-    //         RestartGame();
-    //     }
-    //     
-    //     if (Input.GetKeyDown(KeyCode.JoystickButton0) || 
-    //         Input.GetKeyDown(KeyCode.JoystickButton1) || 
-    //         Input.GetKeyDown(KeyCode.JoystickButton2) || 
-    //         Input.GetKeyDown(KeyCode.JoystickButton3))
-    //     {
-    //         Debug.Log("Controller button pressed via legacy input");
-    //         RestartScene();
-    //     }
-    // }
     
     IEnumerator StartGameAfterPositioning()
     {
