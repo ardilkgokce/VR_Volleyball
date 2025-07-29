@@ -2972,15 +2972,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   team: 1
   detectionRadius: 5
-  catchRadius: 1.2
+  catchRadius: 1
   catchHeight: 2
-  catchVerticalRange: 0.5
+  catchVerticalRange: 0.4
   hitPointTriggerDistance: 1.4
   throwForce: 15
   throwHeight: 5
-  redTeamCatchDelay: 0.3
-  moveSpeed: 4
-  runSpeed: 4
+  redTeamCatchDelay: 0.45
+  moveSpeed: 2.7
+  runSpeed: 2.7
   stoppingDistance: 0.5
   enableMovement: 1
   maxMoveDistance: 20

@@ -3223,11 +3223,11 @@ MonoBehaviour:
   detectionRadius: 5
   catchRadius: 1.2
   catchHeight: 2
-  catchVerticalRange: 0.5
+  catchVerticalRange: 0.4
   hitPointTriggerDistance: 1.4
   throwForce: 15
   throwHeight: 5
-  redTeamCatchDelay: 0.3
+  redTeamCatchDelay: 0.45
   moveSpeed: 4
   runSpeed: 4
   stoppingDistance: 0.5
