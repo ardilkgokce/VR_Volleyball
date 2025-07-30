@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
@@ -5,6 +6,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit;
 using TMPro;
 using System.Collections;
+using Random = UnityEngine.Random;
 
 public class GameManager : MonoBehaviour
 {
@@ -95,7 +97,7 @@ public class GameManager : MonoBehaviour
     
     [Header("Scene Management")]
     [Tooltip("Oyun bittiğinde dönülecek sahne adı")]
-    public string mainMenuSceneName = "MainMenu";
+    public string mainMenuSceneName = "Info";
     [Tooltip("Ana menüye dönmeden önceki bekleme süresi")]
     public float returnToMenuDelay = 5f;
     
@@ -196,7 +198,7 @@ public class GameManager : MonoBehaviour
         
         UpdateAllUI();
     }
-    
+
     void ValidateUIElements()
     {
         // UI elementlerinin atanıp atanmadığını kontrol et

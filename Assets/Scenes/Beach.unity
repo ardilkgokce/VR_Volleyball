@@ -27125,7 +27125,7 @@ MonoBehaviour:
   scoreSound: {fileID: 8300000, guid: eedab6aca4475864fbdbafc2e713211e, type: 3}
   setWinSound: {fileID: 8300000, guid: bb76cd93e5ebd1a48aec6f015daeca3b, type: 3}
   matchWinSound: {fileID: 8300000, guid: fddeedc3f998de54ea9dcbb4e1c03f10, type: 3}
-  mainMenuSceneName: MainMenu
+  mainMenuSceneName: Info
   returnToMenuDelay: 5
   isGameActive: 1
   xriInputActions: {fileID: -944628639613478452, guid: c348712bda248c246b8c49b3db54643f,
