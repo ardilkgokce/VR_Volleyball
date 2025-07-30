@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using UnityEngine.InputSystem;
 using TMPro;
 using System.IO;
 using System.Text;
@@ -20,10 +21,13 @@ public class PlayerDataManager : MonoBehaviour
     [Header("File Settings")]
     public string fileName = "player_data.csv";
     
-    private string filePath;
-    
     [Header("Scene Settings")]
     public string targetSceneName = "Beach";
+    
+    // Private variables
+    private string filePath;
+    private InputActionAsset xriInputActions;
+    private InputAction aButtonAction;
     
     // Player data structure - new fields can be added later
     [System.Serializable]
@@ -65,6 +69,9 @@ public class PlayerDataManager : MonoBehaviour
         {
             startButton.onClick.AddListener(SaveData);
         }
+        
+        // Setup XRI input actions
+        SetupXRIInputActions();
         
         Debug.Log("CSV File Path: " + filePath);
     }
@@ -249,5 +256,72 @@ public class PlayerDataManager : MonoBehaviour
         
         string csvLine = ConvertPlayerToCSVLine(test);
         AppendToFile(csvLine);
+    }
+    
+    // XRI Input Action setup
+    void SetupXRIInputActions()
+    {
+        // Try to find XRI Input Actions if not assigned
+        if (xriInputActions == null)
+        {
+            var xrManager = UnityEngine.Object.FindObjectOfType<UnityEngine.XR.Interaction.Toolkit.XRInteractionManager>();
+            if (xrManager != null)
+            {
+                var actionAssets = Resources.FindObjectsOfTypeAll<InputActionAsset>();
+                foreach (var asset in actionAssets)
+                {
+                    if (asset.name.Contains("XRI"))
+                    {
+                        xriInputActions = asset;
+                        Debug.Log($"Found XRI Input Actions: {asset.name}");
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (xriInputActions != null)
+        {
+            var rightHandInteraction = xriInputActions.FindActionMap("XRI RightHand Interaction");
+            if (rightHandInteraction != null)
+            {
+                // Use Scale Toggle action for A button
+                aButtonAction = rightHandInteraction.FindAction("Scale Toggle");
+                if (aButtonAction != null)
+                {
+                    aButtonAction.Enable();
+                    aButtonAction.performed += OnAButtonPressed;
+                    Debug.Log("A Button (Scale Toggle) action setup complete");
+                }
+                else
+                {
+                    Debug.LogWarning("Scale Toggle action not found for A button!");
+                }
+            }
+        }
+        else
+        {
+            Debug.LogWarning("XRI Input Actions not found! A button will not work.");
+        }
+    }
+    
+    // A button pressed callback
+    void OnAButtonPressed(InputAction.CallbackContext context)
+    {
+        if (context.phase == InputActionPhase.Performed)
+        {
+            Debug.Log("A Button pressed - Saving data and loading scene");
+            SaveData();
+        }
+    }
+    
+    // Cleanup on destroy
+    void OnDestroy()
+    {
+        if (aButtonAction != null)
+        {
+            aButtonAction.performed -= OnAButtonPressed;
+            aButtonAction.Disable();
+        }
     }
 }

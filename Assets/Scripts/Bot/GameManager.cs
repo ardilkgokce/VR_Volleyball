@@ -802,34 +802,18 @@ public class GameManager : MonoBehaviour
             var rightHandInteraction = xriInputActions.FindActionMap("XRI RightHand Interaction");
             if (rightHandInteraction != null)
             {
-                restartAction = rightHandInteraction.FindAction("Select");
-                if (restartAction != null)
+                // A butonu için Scale Toggle action'ını kullan
+                var scaleToggleAction = rightHandInteraction.FindAction("Scale Toggle");
+                if (scaleToggleAction != null)
                 {
+                    restartAction = scaleToggleAction;
                     restartAction.Enable();
-                    restartAction.performed += OnRestartButtonPressed;
-                    Debug.Log("Using XRI RightHand Select action for restart");
+                    restartAction.performed += OnReturnToMenuButtonPressed;
+                    Debug.Log("Using A Button (Scale Toggle) for returning to Info scene");
                 }
-                
-                var activateAction = rightHandInteraction.FindAction("Activate");
-                if (activateAction != null && restartAction == null)
+                else
                 {
-                    restartAction = activateAction;
-                    restartAction.Enable();
-                    restartAction.performed += OnRestartButtonPressed;
-                    Debug.Log("Using XRI RightHand Activate action for restart");
-                }
-            }
-            
-            var uiActionMap = xriInputActions.FindActionMap("XRI UI");
-            if (uiActionMap != null && restartAction == null)
-            {
-                var submitAction = uiActionMap.FindAction("Submit");
-                if (submitAction != null)
-                {
-                    restartAction = submitAction;
-                    restartAction.Enable();
-                    restartAction.performed += OnRestartButtonPressed;
-                    Debug.Log("Using XRI UI Submit action for restart");
+                    Debug.LogWarning("Scale Toggle action not found for A button!");
                 }
             }
         }
@@ -839,21 +823,22 @@ public class GameManager : MonoBehaviour
         }
     }
     
+    
     void OnDestroy()
     {
         if (restartAction != null)
         {
-            restartAction.performed -= OnRestartButtonPressed;
+            restartAction.performed -= OnReturnToMenuButtonPressed;
             restartAction.Disable();
         }
     }
     
-    void OnRestartButtonPressed(InputAction.CallbackContext context)
+    void OnReturnToMenuButtonPressed(InputAction.CallbackContext context)
     {
         if (context.phase == InputActionPhase.Performed)
         {
-            Debug.Log($"Restart button pressed via: {context.action.name}");
-            RestartScene();
+            Debug.Log($"A Button pressed - Returning to Info scene");
+            ReturnToInfoScene();
         }
     }
     
@@ -908,12 +893,12 @@ public class GameManager : MonoBehaviour
         SetupGame();
     }
     
-    void RestartScene()
+    void ReturnToInfoScene()
     {
-        Debug.Log("Restarting scene...");
-        
-        Scene currentScene = SceneManager.GetActiveScene();
-        SceneManager.LoadScene(currentScene.name);
+        Debug.Log("Returning to Info scene...");
+    
+        // Info sahnesine dön
+        SceneManager.LoadScene("Info");
     }
     
     public bool IsRallyActive()
