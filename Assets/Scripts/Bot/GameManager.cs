@@ -101,6 +101,10 @@ public class GameManager : MonoBehaviour
     [Tooltip("Ana menüye dönmeden önceki bekleme süresi")]
     public float returnToMenuDelay = 5f;
     
+    [Header("Total Score Tracking")]
+    [SerializeField] private int totalRedTeamPoints = 0;  // Tüm setlerdeki toplam red puanı
+    [SerializeField] private int totalBlueTeamPoints = 0; // Tüm setlerdeki toplam blue puanı
+    
     [Header("Game State")]
     public bool isGameActive = true;
     private bool isRallyActive = true;
@@ -401,6 +405,7 @@ public class GameManager : MonoBehaviour
         StartCoroutine(StartGameAfterPositioning());
     }
     
+    // AddScore metodunu güncelle - puan eklendiğinde toplam puanı da artır:
     public void AddScore(Team scoringTeam, string reason = "")
     {
         if (!isGameActive || !isRallyActive || !isMatchActive) 
@@ -408,35 +413,37 @@ public class GameManager : MonoBehaviour
             Debug.Log($"Score ignored - Game Active: {isGameActive}, Rally Active: {isRallyActive}, Match Active: {isMatchActive}");
             return;
         }
-        
+    
         isRallyActive = false;
         Debug.Log("Rally ended - scoring disabled until new rally");
-        
+    
         if (scoringTeam == Team.Red)
         {
             redTeamScore++;
+            totalRedTeamPoints++; // Toplam puana ekle
             Debug.Log($"Red team scores! Reason: {reason}. Score: {redTeamScore}-{blueTeamScore}");
         }
         else
         {
             blueTeamScore++;
+            totalBlueTeamPoints++; // Toplam puana ekle
             Debug.Log($"Blue team scores! Reason: {reason}. Score: {redTeamScore}-{blueTeamScore}");
         }
-        
+    
         // Sayı sesi çal
         PlaySound(scoreSound);
-        
+    
         // Sayı olduğunda tüm botları default pozisyonlarına gönder
         ReturnAllBotsToDefaultPosition();
-        
+    
         servingTeam = scoringTeam;
-        
+    
         UpdateScoreUI();
-        
+    
         OnScoreChanged?.Invoke(scoringTeam, redTeamScore, blueTeamScore);
-        
+    
         CheckSetEnd();
-        
+    
         if (isGameActive && isMatchActive)
         {
             StartCoroutine(StartNewRally(scoringTeam));
@@ -629,40 +636,93 @@ public class GameManager : MonoBehaviour
         StartCoroutine(StartNewRally(servingTeam));
     }
     
-    void ShowMatchEndUI(Team winner)
+    // ShowMatchEndUI metodunu güncelle - ağırlıklı puan sistemini kullan:
+void ShowMatchEndUI(Team winner)
+{
+    // Game status text'i kapat (artık gerekli değil)
+    if (gameStatusText != null)
     {
-        // Game status text'i kapat (artık gerekli değil)
-        if (gameStatusText != null)
+        gameStatusText.gameObject.SetActive(false);
+    }
+    
+    // VR oyuncusunun takımını bul
+    GameObject vrPlayer = GameObject.FindWithTag("Player");
+    Team playerTeam = Team.Blue; // Default
+    
+    if (vrPlayer != null)
+    {
+        VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+        if (vrProxy != null)
         {
-            gameStatusText.gameObject.SetActive(false);
-        }
-        
-        // Kazanan takımın panelini göster
-        if (winner == Team.Blue)
-        {
-            if (blueWinPanel != null)
-            {
-                blueWinPanel.SetActive(true);
-                Debug.Log("Blue team win panel activated!");
-            }
-            else
-            {
-                Debug.LogWarning("Blue Win Panel is not assigned!");
-            }
-        }
-        else // Team.Red
-        {
-            if (redWinPanel != null)
-            {
-                redWinPanel.SetActive(true);
-                Debug.Log("Red team win panel activated!");
-            }
-            else
-            {
-                Debug.LogWarning("Red Win Panel is not assigned!");
-            }
+            playerTeam = vrProxy.playerTeam;
         }
     }
+    
+    // Oyuncunun ağırlıklı skorunu hesapla
+    // Formül: (Kazanılan Set Sayısı × 100) + Toplam Sayı Puanı
+    int playerScore = 0;
+    int playerSets = 0;
+    int playerTotalPoints = 0;
+    
+    if (playerTeam == Team.Blue)
+    {
+        playerSets = blueTeamSets;
+        playerTotalPoints = totalBlueTeamPoints;
+    }
+    else
+    {
+        playerSets = redTeamSets;
+        playerTotalPoints = totalRedTeamPoints;
+    }
+    
+    // Ağırlıklı puan hesaplama
+    // Formül: (Kazanılan Set Sayısı × 50) + (Toplam Sayı Puanı × 5)
+    // 3-0 bonus: Eğer 3-0 kazandıysa ekstra 50 puan
+    playerScore = (playerSets * 50) + (playerTotalPoints * 5);
+    
+    // 3-0 galibiyet bonusu
+    if (playerSets == 3 && playerTotalPoints <= 9) // 9 veya daha az sayı = 3-0 galibiyet
+    {
+        playerScore += 50; // Bonus puan
+        Debug.Log("3-0 victory bonus applied: +50 points");
+    }
+    
+    Debug.Log($"Player final score calculation:");
+    Debug.Log($"- Team: {playerTeam}");
+    Debug.Log($"- Sets won: {playerSets}");
+    Debug.Log($"- Total points: {playerTotalPoints}");
+    Debug.Log($"- Weighted score: {playerScore}");
+    
+    // Skoru kaydet
+    PlayerDataManager.UpdatePlayerScore(playerScore);
+    Debug.Log($"Player weighted score saved: {playerScore}");
+    
+    // Kazanan takımın panelini göster
+    if (winner == Team.Blue)
+    {
+        if (blueWinPanel != null)
+        {
+            blueWinPanel.SetActive(true);
+            Debug.Log("Blue team win panel activated!");
+        }
+        else
+        {
+            Debug.LogWarning("Blue Win Panel is not assigned!");
+        }
+    }
+    else // Team.Red
+    {
+        if (redWinPanel != null)
+        {
+            redWinPanel.SetActive(true);
+            Debug.Log("Red team win panel activated!");
+        }
+        else
+        {
+            Debug.LogWarning("Red Win Panel is not assigned!");
+        }
+    }
+}
     
     IEnumerator StartNewRally(Team servingTeam)
     {
@@ -766,6 +826,7 @@ public class GameManager : MonoBehaviour
         return null;
     }
     
+    // ResetScore metodunu güncelle - toplam puanları da sıfırla:
     public void ResetScore()
     {
         // Tüm skorları sıfırla
@@ -773,24 +834,26 @@ public class GameManager : MonoBehaviour
         blueTeamScore = 0;
         redTeamSets = 0;
         blueTeamSets = 0;
+        totalRedTeamPoints = 0;    // Toplam puanları sıfırla
+        totalBlueTeamPoints = 0;   // Toplam puanları sıfırla
         currentSet = 1;
         servingTeam = Team.Blue;
         isGameActive = true;
         isRallyActive = true;
         isMatchActive = true;
         isFirstRally = true;
-        
+    
         UpdateAllUI();
-        
+    
         if (gameStatusText != null)
         {
             gameStatusText.gameObject.SetActive(false);
         }
-        
+    
         // Win panellerini kapat
         if (blueWinPanel != null)
             blueWinPanel.SetActive(false);
-            
+        
         if (redWinPanel != null)
             redWinPanel.SetActive(false);
     }

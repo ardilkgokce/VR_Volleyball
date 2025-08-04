@@ -12,8 +12,7 @@ using System;
 public class PlayerDataManager : MonoBehaviour
 {
     [Header("UI Elements")]
-    public TMP_InputField nameInputField;
-    public TMP_InputField surnameInputField;
+    public TMP_InputField nameInputField;  // Bu artık hem isim hem soyisim içerecek
     public TMP_InputField phoneInputField;
     public TMP_InputField emailInputField;
     public Button startButton;
@@ -29,27 +28,27 @@ public class PlayerDataManager : MonoBehaviour
     private InputActionAsset xriInputActions;
     private InputAction aButtonAction;
     
-    // Player data structure - new fields can be added later
+    // Player data structure - updated to have single name field
     [System.Serializable]
     public class PlayerData
     {
-        public string name;
-        public string surname;
+        public string fullName;  // İsim ve soyisim birlikte
         public string phone;
         public string email;
         public string date;
         public string time;
+        public string score;  // Oyun skoru
         // For future expandability
         public Dictionary<string, string> extraFields = new Dictionary<string, string>();
         
         public PlayerData()
         {
-            name = "null";
-            surname = "null";
+            fullName = "null";
             phone = "null";
             email = "null";
             date = DateTime.Now.ToString("yyyy-MM-dd");
             time = DateTime.Now.ToString("HH:mm:ss");
+            score = "0";
         }
     }
     
@@ -80,8 +79,8 @@ public class PlayerDataManager : MonoBehaviour
     {
         try
         {
-            // CSV header row
-            string header = "Name,Surname,Phone,Email,Date,Time\n";
+            // CSV header row - updated header
+            string header = "Full Name,Phone,Email,Date,Time,Score\n";
             File.WriteAllText(filePath, header, Encoding.UTF8);
             Debug.Log("CSV file created: " + filePath);
         }
@@ -96,22 +95,25 @@ public class PlayerDataManager : MonoBehaviour
         PlayerData newPlayer = new PlayerData();
         
         // Get data from input fields, mark as "null" if empty
-        newPlayer.name = string.IsNullOrEmpty(nameInputField.text) ? "null" : nameInputField.text.Trim();
-        newPlayer.surname = string.IsNullOrEmpty(surnameInputField.text) ? "null" : surnameInputField.text.Trim();
+        newPlayer.fullName = string.IsNullOrEmpty(nameInputField.text) ? "null" : nameInputField.text.Trim();
         newPlayer.phone = string.IsNullOrEmpty(phoneInputField.text) ? "null" : phoneInputField.text.Trim();
         newPlayer.email = string.IsNullOrEmpty(emailInputField.text) ? "null" : emailInputField.text.Trim();
         
-        // Create CSV format line
-        string csvLine = ConvertPlayerToCSVLine(newPlayer);
-        
-        // Append to file
-        AppendToFile(csvLine);
+        // PlayerPrefs'e oyuncu verilerini kaydet (oyun sonunda skor eklemek için)
+        PlayerPrefs.SetString("CurrentPlayerName", newPlayer.fullName);
+        PlayerPrefs.SetString("CurrentPlayerPhone", newPlayer.phone);
+        PlayerPrefs.SetString("CurrentPlayerEmail", newPlayer.email);
+        PlayerPrefs.SetString("CurrentPlayerDate", newPlayer.date);
+        PlayerPrefs.SetString("CurrentPlayerTime", newPlayer.time);
+        // CSV'deki satır numarasını da kaydet
+        PlayerPrefs.SetInt("CurrentPlayerLineIndex", GetOrCreatePlayerLineIndex(newPlayer));
+        PlayerPrefs.Save();
         
         // Clear input fields (optional)
         ClearInputs();
         
         // User feedback
-        Debug.Log("Data saved: " + csvLine);
+        Debug.Log("Player data ready for game");
         
         // Load Beach scene after saving data
         SceneManager.LoadScene(targetSceneName);
@@ -120,13 +122,12 @@ public class PlayerDataManager : MonoBehaviour
     string ConvertPlayerToCSVLine(PlayerData player)
     {
         // Handle CSV special characters (comma, quotes etc.)
-        string name = FormatCSVSafe(player.name);
-        string surname = FormatCSVSafe(player.surname);
+        string fullName = FormatCSVSafe(player.fullName);
         string phone = FormatCSVSafe(player.phone);
         string email = FormatCSVSafe(player.email);
         
         return string.Format("{0},{1},{2},{3},{4},{5}\n", 
-            name, surname, phone, email, player.date, player.time);
+            fullName, phone, email, player.date, player.time, player.score);
     }
     
     string FormatCSVSafe(string value)
@@ -159,7 +160,6 @@ public class PlayerDataManager : MonoBehaviour
     void ClearInputs()
     {
         nameInputField.text = "";
-        surnameInputField.text = "";
         phoneInputField.text = "";
         emailInputField.text = "";
     }
@@ -181,15 +181,15 @@ public class PlayerDataManager : MonoBehaviour
             {
                 string[] values = ParseCSVLine(lines[i]);
                 
-                if (values.Length >= 6)
+                if (values.Length >= 6)  // 6 alan oldu artık
                 {
                     PlayerData player = new PlayerData();
-                    player.name = values[0];
-                    player.surname = values[1];
-                    player.phone = values[2];
-                    player.email = values[3];
-                    player.date = values[4];
-                    player.time = values[5];
+                    player.fullName = values[0];
+                    player.phone = values[1];
+                    player.email = values[2];
+                    player.date = values[3];
+                    player.time = values[4];
+                    player.score = values[5];
                     
                     players.Add(player);
                 }
@@ -249,8 +249,7 @@ public class PlayerDataManager : MonoBehaviour
     void TestAddSampleData()
     {
         PlayerData test = new PlayerData();
-        test.name = "Test";
-        test.surname = "User";
+        test.fullName = "Ahmet Yılmaz";  // İsim ve soyisim birlikte
         test.phone = "5551234567";
         test.email = "test@email.com";
         
@@ -315,13 +314,115 @@ public class PlayerDataManager : MonoBehaviour
         }
     }
     
-    // Cleanup on destroy
-    void OnDestroy()
+    // Oyuncu satırını bul veya yeni oluştur
+    int GetOrCreatePlayerLineIndex(PlayerData player)
     {
-        if (aButtonAction != null)
+        string[] lines = new string[0];
+        
+        if (File.Exists(filePath))
         {
-            aButtonAction.performed -= OnAButtonPressed;
-            aButtonAction.Disable();
+            lines = File.ReadAllLines(filePath, Encoding.UTF8);
         }
+        
+        // Mevcut oyuncuyu ara (isim ile)
+        for (int i = 1; i < lines.Length; i++) // 1'den başla (header'ı atla)
+        {
+            string[] values = ParseCSVLine(lines[i]);
+            if (values.Length >= 1 && values[0] == player.fullName)
+            {
+                Debug.Log($"Found existing player at line {i}: {player.fullName}");
+                return i;
+            }
+        }
+        
+        // Oyuncu bulunamadı, yeni satır ekle
+        Debug.Log($"Creating new player entry: {player.fullName}");
+        string csvLine = ConvertPlayerToCSVLine(player);
+        AppendToFile(csvLine);
+        
+        // Yeni eklenen satırın index'ini döndür
+        return lines.Length; // Yeni satır son satır olacak
+    }
+    
+    // Oyun sonunda skoru güncelleme metodu
+    public static void UpdatePlayerScore(int finalScore)
+    {
+        string playerName = PlayerPrefs.GetString("CurrentPlayerName", "null");
+        string playerPhone = PlayerPrefs.GetString("CurrentPlayerPhone", "null");
+        string playerEmail = PlayerPrefs.GetString("CurrentPlayerEmail", "null");
+        string playerDate = PlayerPrefs.GetString("CurrentPlayerDate", DateTime.Now.ToString("yyyy-MM-dd"));
+        string playerTime = PlayerPrefs.GetString("CurrentPlayerTime", DateTime.Now.ToString("HH:mm:ss"));
+        int lineIndex = PlayerPrefs.GetInt("CurrentPlayerLineIndex", -1);
+        
+        if (lineIndex == -1)
+        {
+            Debug.LogError("Player line index not found!");
+            return;
+        }
+        
+        string filePath = Path.Combine(Application.persistentDataPath, "player_data.csv");
+        
+        try
+        {
+            // Tüm satırları oku
+            string[] lines = File.ReadAllLines(filePath, Encoding.UTF8);
+            
+            if (lineIndex >= 0 && lineIndex < lines.Length)
+            {
+                // Oyuncu verisini güncelle
+                PlayerData player = new PlayerData();
+                player.fullName = playerName;
+                player.phone = playerPhone;
+                player.email = playerEmail;
+                player.date = playerDate;
+                player.time = playerTime;
+                player.score = finalScore.ToString();
+                
+                // Güncellenen satırı oluştur
+                string updatedLine = string.Format("{0},{1},{2},{3},{4},{5}", 
+                    FormatCSVSafeStatic(player.fullName), 
+                    FormatCSVSafeStatic(player.phone), 
+                    FormatCSVSafeStatic(player.email), 
+                    player.date, 
+                    player.time, 
+                    player.score);
+                
+                // İlgili satırı güncelle
+                lines[lineIndex] = updatedLine;
+                
+                // Dosyayı yeniden yaz
+                File.WriteAllLines(filePath, lines, Encoding.UTF8);
+                
+                Debug.Log($"Player score updated: {playerName} - Score: {finalScore} at line {lineIndex}");
+            }
+            else
+            {
+                Debug.LogError($"Invalid line index: {lineIndex}");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Score update error: " + e.Message);
+        }
+        
+        // PlayerPrefs'i temizle
+        PlayerPrefs.DeleteKey("CurrentPlayerName");
+        PlayerPrefs.DeleteKey("CurrentPlayerPhone");
+        PlayerPrefs.DeleteKey("CurrentPlayerEmail");
+        PlayerPrefs.DeleteKey("CurrentPlayerDate");
+        PlayerPrefs.DeleteKey("CurrentPlayerTime");
+        PlayerPrefs.DeleteKey("CurrentPlayerLineIndex");
+        PlayerPrefs.Save();
+    }
+    
+    // Static version of FormatCSVSafe for static method
+    static string FormatCSVSafeStatic(string value)
+    {
+        if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+        {
+            value = value.Replace("\"", "\"\"");
+            return "\"" + value + "\"";
+        }
+        return value;
     }
 }
