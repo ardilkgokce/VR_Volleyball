@@ -17,6 +17,13 @@ public class PlayerDataManager : MonoBehaviour
     public TMP_InputField emailInputField;
     public Button startButton;
     
+    [Header("Panels")]
+    [Tooltip("Kayıt formu paneli")]
+    public GameObject registrationPanel;
+    
+    [Tooltip("Rank paneli referansı")]
+    public GameObject rankPanel;
+    
     [Header("File Settings")]
     public string fileName = "player_data.csv";
     
@@ -73,6 +80,52 @@ public class PlayerDataManager : MonoBehaviour
         SetupXRIInputActions();
         
         Debug.Log("CSV File Path: " + filePath);
+        
+        // Beach sahnesinden geldiyse rank panelini göster
+        CheckIfComingFromBeach();
+    }
+    
+    void CheckIfComingFromBeach()
+    {
+        // PlayerPrefs'ten kontrol et
+        if (PlayerPrefs.GetInt("ShowRankPanel", 0) == 1)
+        {
+            // Rank panelini göster
+            if (rankPanel != null)
+            {
+                rankPanel.SetActive(true);
+                Debug.Log("Showing rank panel - coming from Beach scene");
+            }
+            
+            if (registrationPanel != null)
+            {
+                registrationPanel.SetActive(false);
+            }
+            
+            // RankManager varsa sıralamayı yenile
+            RankManager rankManager = FindObjectOfType<RankManager>();
+            if (rankManager != null)
+            {
+                rankManager.RefreshRanking();
+            }
+            
+            // Flag'i temizle
+            PlayerPrefs.SetInt("ShowRankPanel", 0);
+            PlayerPrefs.Save();
+        }
+        else
+        {
+            // Normal başlangıç - kayıt panelini göster
+            if (registrationPanel != null)
+            {
+                registrationPanel.SetActive(true);
+            }
+            
+            if (rankPanel != null)
+            {
+                rankPanel.SetActive(false);
+            }
+        }
     }
     
     void CreateFileHeader()
@@ -117,6 +170,36 @@ public class PlayerDataManager : MonoBehaviour
         
         // Load Beach scene after saving data
         SceneManager.LoadScene(targetSceneName);
+    }
+    
+    // Oyuncu satırını bul veya yeni oluştur
+    int GetOrCreatePlayerLineIndex(PlayerData player)
+    {
+        string[] lines = new string[0];
+        
+        if (File.Exists(filePath))
+        {
+            lines = File.ReadAllLines(filePath, Encoding.UTF8);
+        }
+        
+        // Mevcut oyuncuyu ara (isim ile)
+        for (int i = 1; i < lines.Length; i++) // 1'den başla (header'ı atla)
+        {
+            string[] values = ParseCSVLine(lines[i]);
+            if (values.Length >= 1 && values[0] == player.fullName)
+            {
+                Debug.Log($"Found existing player at line {i}: {player.fullName}");
+                return i;
+            }
+        }
+        
+        // Oyuncu bulunamadı, yeni satır ekle
+        Debug.Log($"Creating new player entry: {player.fullName}");
+        string csvLine = ConvertPlayerToCSVLine(player);
+        AppendToFile(csvLine);
+        
+        // Yeni eklenen satırın index'ini döndür
+        return lines.Length; // Yeni satır son satır olacak
     }
     
     string ConvertPlayerToCSVLine(PlayerData player)
@@ -314,36 +397,6 @@ public class PlayerDataManager : MonoBehaviour
         }
     }
     
-    // Oyuncu satırını bul veya yeni oluştur
-    int GetOrCreatePlayerLineIndex(PlayerData player)
-    {
-        string[] lines = new string[0];
-        
-        if (File.Exists(filePath))
-        {
-            lines = File.ReadAllLines(filePath, Encoding.UTF8);
-        }
-        
-        // Mevcut oyuncuyu ara (isim ile)
-        for (int i = 1; i < lines.Length; i++) // 1'den başla (header'ı atla)
-        {
-            string[] values = ParseCSVLine(lines[i]);
-            if (values.Length >= 1 && values[0] == player.fullName)
-            {
-                Debug.Log($"Found existing player at line {i}: {player.fullName}");
-                return i;
-            }
-        }
-        
-        // Oyuncu bulunamadı, yeni satır ekle
-        Debug.Log($"Creating new player entry: {player.fullName}");
-        string csvLine = ConvertPlayerToCSVLine(player);
-        AppendToFile(csvLine);
-        
-        // Yeni eklenen satırın index'ini döndür
-        return lines.Length; // Yeni satır son satır olacak
-    }
-    
     // Oyun sonunda skoru güncelleme metodu
     public static void UpdatePlayerScore(int finalScore)
     {
@@ -424,5 +477,15 @@ public class PlayerDataManager : MonoBehaviour
             return "\"" + value + "\"";
         }
         return value;
+    }
+    
+    // Cleanup on destroy
+    void OnDestroy()
+    {
+        if (aButtonAction != null)
+        {
+            aButtonAction.performed -= OnAButtonPressed;
+            aButtonAction.Disable();
+        }
     }
 }

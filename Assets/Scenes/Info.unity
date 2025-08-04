@@ -2552,6 +2552,17 @@ MonoBehaviour:
   - {fileID: 237462391}
   - {fileID: 350074765}
   - {fileID: 1376397708}
+  rankTexts2:
+  - {fileID: 1786923562}
+  - {fileID: 881733043}
+  - {fileID: 862911652}
+  - {fileID: 765906184}
+  - {fileID: 474955780}
+  - {fileID: 315485145}
+  - {fileID: 2019355896}
+  - {fileID: 1705680461}
+  - {fileID: 560327979}
+  - {fileID: 1126513627}
   rankPanel: {fileID: 968880170}
   registrationPanel: {fileID: 708653456}
   switchPanelKey: 1
@@ -5028,7 +5039,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &968880171
 RectTransform:
   m_ObjectHideFlags: 0
@@ -8261,6 +8272,8 @@ MonoBehaviour:
   phoneInputField: {fileID: 923040833}
   emailInputField: {fileID: 2106105309}
   startButton: {fileID: 560164292517482650}
+  registrationPanel: {fileID: 0}
+  rankPanel: {fileID: 0}
   fileName: player_data.csv
   targetSceneName: Beach
 --- !u!4 &1684339303

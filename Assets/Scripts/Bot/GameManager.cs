@@ -577,14 +577,18 @@ public class GameManager : MonoBehaviour
         // Oyun bitiş düdüğü
         yield return new WaitForSeconds(1f); // Kısa bir bekleme
         PlaySound(gameEndWhistle);
-        
+    
         // Belirlenen süre kadar bekle
         yield return new WaitForSeconds(returnToMenuDelay);
-        
+    
+        // Info sahnesine dönerken rank panelinin açılması için flag ayarla
+        PlayerPrefs.SetInt("ShowRankPanel", 1);
+        PlayerPrefs.Save();
+    
         // Ana menüye dön
         if (!string.IsNullOrEmpty(mainMenuSceneName))
         {
-            Debug.Log($"Returning to main menu: {mainMenuSceneName}");
+            Debug.Log($"Returning to main menu: {mainMenuSceneName} with rank panel");
             SceneManager.LoadScene(mainMenuSceneName);
         }
         else
@@ -592,6 +596,7 @@ public class GameManager : MonoBehaviour
             Debug.LogWarning("Main menu scene name is not set! Cannot return to menu.");
         }
     }
+
     
     IEnumerator PrepareNextSet()
     {
@@ -959,6 +964,10 @@ void ShowMatchEndUI(Team winner)
     void ReturnToInfoScene()
     {
         Debug.Log("Returning to Info scene...");
+    
+        // Rank panelinin açılması için flag ayarla
+        PlayerPrefs.SetInt("ShowRankPanel", 1);
+        PlayerPrefs.Save();
     
         // Info sahnesine dön
         SceneManager.LoadScene("Info");

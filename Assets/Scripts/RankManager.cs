@@ -11,8 +11,11 @@ using UnityEngine.InputSystem;
 public class RankManager : MonoBehaviour
 {
     [Header("Rank UI Elements")]
-    [Tooltip("10 adet rank text elementi (sırasıyla)")]
+    [Tooltip("10 adet rank text elementi (sırasıyla) - Canvas 1")]
     public TextMeshProUGUI[] rankTexts = new TextMeshProUGUI[10];
+    
+    [Tooltip("10 adet rank text elementi (sırasıyla) - Canvas 2")]
+    public TextMeshProUGUI[] rankTexts2 = new TextMeshProUGUI[10];
     
     [Header("Panel References")]
     [Tooltip("Rank paneli")]
@@ -132,7 +135,7 @@ public class RankManager : MonoBehaviour
     
     void UpdateRankUI()
     {
-        // Tüm text'leri güncelle
+        // Canvas 1 text'leri güncelle
         for (int i = 0; i < rankTexts.Length; i++)
         {
             if (rankTexts[i] != null)
@@ -142,41 +145,32 @@ public class RankManager : MonoBehaviour
                     // Oyuncu varsa göster
                     string rankText = $"{i + 1}. {playerScores[i].fullName.ToUpper()} {playerScores[i].score} PUAN";
                     rankTexts[i].text = rankText;
-                    
-                    // İlk 3'ü vurgula (opsiyonel - renk değişikliği)
-                    if (i < 3)
-                    {
-                        rankTexts[i].color = GetRankColor(i);
-                    }
-                    else
-                    {
-                        rankTexts[i].color = Color.white;
-                    }
                 }
                 else
                 {
                     // Oyuncu yoksa boş göster
                     rankTexts[i].text = $"{i + 1}. --- --- PUAN";
-                    rankTexts[i].color = Color.gray;
                 }
             }
         }
         
-        Debug.Log($"Sıralama güncellendi. Toplam oyuncu: {playerScores.Count}");
-    }
-    
-    Color GetRankColor(int rank)
-    {
-        switch (rank)
+        // Canvas 2 text'leri güncelle
+        for (int i = 0; i < rankTexts2.Length; i++)
         {
-            case 0: // 1. sıra - Altın
-                return new Color(1f, 0.843f, 0f); // Gold
-            case 1: // 2. sıra - Gümüş
-                return new Color(0.75f, 0.75f, 0.75f); // Silver
-            case 2: // 3. sıra - Bronz
-                return new Color(0.803f, 0.498f, 0.196f); // Bronze
-            default:
-                return Color.white;
+            if (rankTexts2[i] != null)
+            {
+                if (i < playerScores.Count)
+                {
+                    // Oyuncu varsa göster
+                    string rankText = $"{i + 1}. {playerScores[i].fullName.ToUpper()} {playerScores[i].score} PUAN";
+                    rankTexts2[i].text = rankText;
+                }
+                else
+                {
+                    // Oyuncu yoksa boş göster
+                    rankTexts2[i].text = $"{i + 1}. --- --- PUAN";
+                }
+            }
         }
     }
     
