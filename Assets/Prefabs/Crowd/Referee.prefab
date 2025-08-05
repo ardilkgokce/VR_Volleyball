@@ -2209,14 +2209,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4308687460118473868}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.08825753, y: 0.000016570726, z: 0.000007823384, w: 0.99609774}
+  m_LocalRotation: {x: 0.08825977, y: -0.0000007685033, z: 0.000008673308, w: 0.9960975}
   m_LocalPosition: {x: 0.00000005597364, y: 0.20140788, z: -0.012210799}
   m_LocalScale: {x: 1, y: 1.0000004, z: 1.0000004}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3624991988257133886}
   m_Father: {fileID: 4980879704614945173}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 10.127, y: 0, z: 0.001}
 --- !u!1 &4622457455464081538
 GameObject:
   m_ObjectHideFlags: 0
@@ -4908,6 +4908,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3969491841098125184}
   - component: {fileID: 1749114107062239522}
+  - component: {fileID: 4944030122139635739}
   m_Layer: 0
   m_Name: Referee
   m_TagString: Untagged
@@ -4964,6 +4965,59 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &4944030122139635739
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9184529645299024097}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cd46718200c90a646a18ee7bc524a670, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  animator: {fileID: 1749114107062239522}
+  headMoveParameterName: HeadMove
+  headLayerName: HeadLayer
+  searchInterval: 0.5
+  reSearchDelay: 0.2
+  maxHorizontalAngle: 60
+  trackingSpeed: 3
+  smoothTime: 0.15
+  enableTracking: 1
+  minBallDistance: 2
+  maxBallDistance: 30
+  distanceInfluence:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  useLayerWeight: 1
+  layerWeightSpeed: 2
+  lookAtBallHeight: 0
+  maxVerticalAngle: 30
+  showDebugInfo: 0
+  showGizmos: 1
 --- !u!1 &9185896799748496212
 GameObject:
   m_ObjectHideFlags: 0
