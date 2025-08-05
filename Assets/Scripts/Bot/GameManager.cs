@@ -113,6 +113,16 @@ public class GameManager : MonoBehaviour
     private Team lastSetWinner = Team.Blue; // Son seti kazanan takım
     private bool isFirstRally = true; // İlk rally kontrolü için
     
+    [Header("Victory Effects")]
+    [Tooltip("Oyun kazanıldığında gösterilecek havai fişek efekti")]
+    public GameObject fireworksParticlePrefab;
+
+    [Tooltip("Havai fişek efektinin spawn pozisyonu")]
+    public Vector3 fireworksSpawnPosition = new Vector3(-144.74f, -5.76f, 36.8f);
+
+    [Tooltip("Havai fişek efektinin süresi")]
+    public float fireworksDuration = 10f;
+    
     [Header("XRI Input Actions")]
     [SerializeField] private InputActionAsset xriInputActions;
     private InputAction restartAction;
@@ -649,6 +659,15 @@ void ShowMatchEndUI(Team winner)
     {
         gameStatusText.gameObject.SetActive(false);
     }
+    // Havai fişek efektini başlat
+    if (fireworksParticlePrefab != null)
+    {
+        SpawnFireworksEffect();
+    }
+    else
+    {
+        Debug.LogWarning("Fireworks particle prefab is not assigned!");
+    }
     
     // VR oyuncusunun takımını bul
     GameObject vrPlayer = GameObject.FindWithTag("Player");
@@ -660,6 +679,35 @@ void ShowMatchEndUI(Team winner)
         if (vrProxy != null)
         {
             playerTeam = vrProxy.playerTeam;
+        }
+    }
+    void SpawnFireworksEffect()
+    {
+        GameObject fireworks = Instantiate(fireworksParticlePrefab, fireworksSpawnPosition, Quaternion.identity);
+        fireworks.name = "Victory_Fireworks";
+    
+        // Particle sistem bileşenini al
+        ParticleSystem particleSystem = fireworks.GetComponent<ParticleSystem>();
+        if (particleSystem != null)
+        {
+            // Particle sistemini başlat
+            particleSystem.Play();
+        
+            // FireworkSoundManager varsa sesleri de başlat
+            FireworkSoundManager soundManager = fireworks.GetComponent<FireworkSoundManager>();
+            if (soundManager == null)
+            {
+                soundManager = fireworks.AddComponent<FireworkSoundManager>();
+            }
+        
+            // Belirli süre sonra efekti yok et
+            Destroy(fireworks, fireworksDuration);
+        
+            Debug.Log($"Fireworks spawned at position: {fireworksSpawnPosition}");
+        }
+        else
+        {
+            Debug.LogError("Fireworks prefab does not have a ParticleSystem component!");
         }
     }
     

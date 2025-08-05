@@ -27786,6 +27786,10 @@ MonoBehaviour:
   totalRedTeamPoints: 0
   totalBlueTeamPoints: 0
   isGameActive: 1
+  fireworksParticlePrefab: {fileID: 5544976213393929648, guid: e610663d3093ed0478f0b4f09c450d38,
+    type: 3}
+  fireworksSpawnPosition: {x: -144.74, y: -5.76, z: 36.8}
+  fireworksDuration: 10
   xriInputActions: {fileID: -944628639613478452, guid: c348712bda248c246b8c49b3db54643f,
     type: 3}
 --- !u!1 &1095319136 stripped
@@ -30647,64 +30651,6 @@ Transform:
   - {fileID: 680245680}
   m_Father: {fileID: 141756689}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &1238619200
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 100008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_Name
-      value: _U2 Fireworks - Sound&Optimized - Pink SnapCrackle
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -144.74
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: -5.76
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 36.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.7071068
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0.7071068
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 400008, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 11400000, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: b8f8b08a34b98fe4abdb4a0d7db1f1d0, type: 3}
 --- !u!1001 &1239231264
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -54517,4 +54463,3 @@ SceneRoots:
   - {fileID: 6856301853560666921}
   - {fileID: 6856301852976068813}
   - {fileID: 1915767001}
-  - {fileID: 1238619200}
