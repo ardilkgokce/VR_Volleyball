@@ -43,6 +43,7 @@ public class VRHandController : MonoBehaviour
     private InputDevice targetDevice;
     private Vector3 previousPosition;
     private Vector3 currentVelocity;
+    private XRNode handNode;
     
     // Team integration
     public Team playerTeam = Team.Blue;
@@ -56,11 +57,17 @@ public class VRHandController : MonoBehaviour
     {
         myTransform = transform;
         
-        // Get the correct controller
-        if (isLeftHand)
-            targetDevice = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-        else
-            targetDevice = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+        // Set hand node
+        handNode = isLeftHand ? XRNode.LeftHand : XRNode.RightHand;
+        
+        // Get the correct controller (fallback for legacy support)
+        if (VRInputManager.Instance == null)
+        {
+            if (isLeftHand)
+                targetDevice = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+            else
+                targetDevice = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+        }
             
         // Get hand renderer if exists
         handRenderer = GetComponentInChildren<Renderer>();
@@ -91,8 +98,32 @@ public class VRHandController : MonoBehaviour
     
     void Update()
     {
-        // Calculate hand velocity
-        currentVelocity = (myTransform.position - previousPosition) / Time.deltaTime;
+        // Update position from VRInputManager if available
+        if (VRInputManager.Instance != null)
+        {
+            Vector3 newPosition;
+            if (VRInputManager.Instance.GetHandPosition(handNode, out newPosition))
+            {
+                myTransform.position = newPosition;
+            }
+            
+            Vector3 velocity;
+            if (VRInputManager.Instance.GetHandVelocity(handNode, out velocity))
+            {
+                currentVelocity = velocity;
+            }
+            else
+            {
+                // Fallback velocity calculation
+                currentVelocity = (myTransform.position - previousPosition) / Time.deltaTime;
+            }
+        }
+        else
+        {
+            // Legacy velocity calculation
+            currentVelocity = (myTransform.position - previousPosition) / Time.deltaTime;
+        }
+        
         previousPosition = myTransform.position;
         
         // Update cooldown
@@ -348,8 +379,14 @@ public class VRHandController : MonoBehaviour
     
     void SendHapticFeedback()
     {
-        if (targetDevice.isValid)
+        // Try VRInputManager first
+        if (VRInputManager.Instance != null)
         {
+            VRInputManager.Instance.SendHapticFeedback(handNode, hapticIntensity, hapticDuration);
+        }
+        else if (targetDevice.isValid)
+        {
+            // Fallback to legacy method
             HapticCapabilities capabilities;
             if (targetDevice.TryGetHapticCapabilities(out capabilities))
             {
