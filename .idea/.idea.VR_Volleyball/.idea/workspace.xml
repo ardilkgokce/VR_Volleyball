@@ -6,9 +6,18 @@
   <component name="ChangeListManager">
     <list default="true" id="25d37ef2-e766-4c4a-9859-1e30cc3c94c1" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/.idea.VR_Volleyball/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.VR_Volleyball/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/BotPrefab.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/BotPrefab.prefab" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Scenes/BotTestScene.unity" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scenes/BotTestScene.unity" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/VolleyballBall 1.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/VolleyballBall 1.prefab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scenes/Beach_Night.unity" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scenes/Beach_Night.unity" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Assets/Scripts/Bot/BotController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Bot/BotController.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/Bot/GameManager.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Bot/GameManager.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/Bot/IdleState.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Bot/IdleState.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/Bot/ServiceState.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Bot/ServiceState.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/CrowdAnimationController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/CrowdAnimationController.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/VR/VRInputManager.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/VR/VRInputManager.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/VRHandController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/VRHandController.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/VolleyballBall.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/VolleyballBall.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/XR/XRGeneralSettingsPerBuildTarget.asset" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/XR/XRGeneralSettingsPerBuildTarget.asset" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProjectSettings/EditorBuildSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/ProjectSettings/EditorBuildSettings.asset" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -19,9 +28,17 @@
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/Bot/ServiceState.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/CrowdAnimationController.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/CrowdBatchManager.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/FireworkParticleAudioBridge.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/RefereeController.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/VRHandController.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/VRPlayerProxy.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Library/PackageCache/com.unity.render-pipelines.universal@14.0.12/Runtime/Passes/PostProcessPass.cs" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Library/PackageCache/com.unity.render-pipelines.universal@14.0.12/Runtime/UniversalRenderPipeline.cs" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Library/PackageCache/com.unity.render-pipelines.universal@14.0.12/Shaders/Lit.shader" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Library/PackageCache/com.valvesoftware.unity.openvr@970ac47786c4/Runtime/OpenVRLoader.cs" root0="SKIP_HIGHLIGHTING" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
@@ -32,19 +49,20 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "HTC-Vive",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "editor.preferences.smartKeys_rider",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RunManager" selected="Attach to Unity Editor.Attach to Unity Editor">
     <configuration name="Start Unity" type="RunUnityExe" factoryName="Unity Executable">
       <option name="EXE_PATH" value="C:\Program Files\Unity\Hub\Editor\2022.3.62f1\Editor\Unity.exe" />
@@ -101,6 +119,28 @@
       <workItem from="1751032560782" duration="8455000" />
       <workItem from="1751459022964" duration="1784000" />
       <workItem from="1751531309792" duration="4119000" />
+      <workItem from="1751618367789" duration="2355000" />
+      <workItem from="1751624246919" duration="3995000" />
+      <workItem from="1751801655830" duration="10545000" />
+      <workItem from="1751880809269" duration="626000" />
+      <workItem from="1752065363224" duration="15858000" />
+      <workItem from="1752142170446" duration="13058000" />
+      <workItem from="1752235301131" duration="884000" />
+      <workItem from="1752271190277" duration="807000" />
+      <workItem from="1752568942065" duration="1608000" />
+      <workItem from="1752576736456" duration="2025000" />
+      <workItem from="1752586879361" duration="3706000" />
+      <workItem from="1752613437634" duration="17000" />
+      <workItem from="1752613854608" duration="1273000" />
+      <workItem from="1752748562273" duration="1786000" />
+      <workItem from="1753098297348" duration="1927000" />
+      <workItem from="1753271286142" duration="3049000" />
+      <workItem from="1753360159577" duration="1201000" />
+      <workItem from="1753874829603" duration="4259000" />
+      <workItem from="1754310418228" duration="3709000" />
+      <workItem from="1754318637638" duration="3348000" />
+      <workItem from="1754393733120" duration="5853000" />
+      <workItem from="1754481179959" duration="3273000" />
     </task>
     <servers />
   </component>

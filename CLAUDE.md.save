@@ -1,0 +1,130 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Unity VR Volleyball game built with Unity 2022.3.62f1, using Universal Render Pipeline (URP) and XR Interaction Toolkit 2.6.4 with OpenXR support for Meta Quest devices.
+
+## Unity Commands
+
+### Building the Project
+- **Standalone Build**: File → Build Settings → Select platform → Build
+- **Build and Run on Device**: File → Build Settings → Build and Run
+- **Open in Unity**: Launch Unity Hub → Open Project → Select this folder
+
+### Common Unity Shortcuts
+- **Play Mode**: Ctrl+P (test in editor)
+- **Pause**: Ctrl+Shift+P
+- **Stop**: Ctrl+P (while playing)
+- **Build Settings**: Ctrl+Shift+B
+
+## Architecture Overview
+
+### Core Game Loop (GameManager)
+Located in `Assets/Scripts/Bot/GameManager.cs`, this singleton manages:
+- Game state (serves, rallies, scoring)
+- Team management with bot spawning
+- Score tracking (best of 5 sets, 21/15 points)
+- Audio feedback and UI updates
+- Scene transitions
+
+### VR Interaction System
+- **VRHandController** (`Assets/Scripts/VRHandController.cs`): Handles hand-ball collisions, calculates hit force/trajectory, provides haptic feedback
+- **VRPlayerProxy** (`Assets/Scripts/VRPlayerProxy.cs`): Bridges VR player with bot targeting system
+
+### Bot AI State Machine
+Bot behavior is controlled by a state machine pattern:
+```
+BotController → BotState (abstract) → Concrete States:
+- IdleState: Default waiting, ball tracking
+- MovingToBallState: Intercept calculation
+- PreparingHitState: Animation setup
+- HittingState: Ball contact
+- ServiceState: Serving logic
+- ReturningToPositionState: Reset position
+```
+
+### Ball Physics
+**VolleyballBall** (`Assets/Scripts/VolleyballBall.cs`) enforces:
+- 3-hit rule per team
+- Boundary detection (in/out)
+- Team possession tracking
+- Visual feedback based on hit count
+
+### Court System
+**VolleyballCourtManager** (`Assets/Scripts/VolleyballCourtManager.cs`):
+- Dynamic court generation
+- Team area definitions
+- Boundary colliders
+- Debug visualization
+
+## Scene Structure
+1. **MainMenu**: Entry point
+2. **Beach**: Beach volleyball environment
+3. **Indoor**: Indoor court
+4. **Outdoor**: Outdoor court (not in build settings)
+
+## Key Interactions
+
+### VR Hit Detection Flow
+1. VRHandController detects collision with ball
+2. Calculates force based on hand velocity
+3. Applies parabolic trajectory
+4. Updates ball's hit count and team possession
+5. Triggers haptic feedback
+
+### Bot Decision Making
+1. Ball enters bot's awareness range
+2. Bot transitions from Idle to MovingToBall
+3. Predicts ball landing position
+4. Moves to intercept point
+5. Transitions through PrepareHit → Hit → ReturnToPosition
+
+### Rally Flow
+1. GameManager assigns serve to team
+2. Serving bot enters ServiceState
+3. Ball tracks hits and team possession
+4. On ground hit or 3-hit violation, point awarded
+5. GameManager updates score, checks for set/match win
+
+## Important Patterns
+
+### Singleton Usage
+GameManager and VolleyballCourtManager use singleton pattern. Access via:
+```csharp
+GameManager.Instance.someMethod()
+VolleyballCourtManager.Instance.someMethod()
+```
+
+### Team Assignment
+- Red Team = 0
+- Blue Team = 1
+- VR player replaces one bot on their assigned team
+
+### Bot Prefab Selection
+Bots randomly select from available prefabs in GameManager's bot prefab lists.
+
+## Development Tips
+
+### Testing VR Features
+- Use Unity's XR Device Simulator for testing without headset
+- Enable Gizmos in Scene view for debug visualization
+- Check VRHandController's showDebugInfo for trajectory visualization
+
+### Modifying Bot Behavior
+- Create new states inheriting from BotState
+- Override Enter(), Update(), Exit() methods
+- Add state transitions in BotController
+
+### Adding New Scenes
+1. Create scene with VolleyballCourtManager
+2. Add GameManager prefab
+3. Configure bot spawn positions
+4. Add to Build Settings
+
+### Physics Layers
+- "Ball" layer for volleyball
+- "VRHand" layer for hand colliders
+- Check Layer collision matrix in Project Settings → Physics
+
