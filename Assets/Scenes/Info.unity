@@ -8275,7 +8275,7 @@ MonoBehaviour:
   registrationPanel: {fileID: 0}
   rankPanel: {fileID: 0}
   fileName: player_data.csv
-  targetSceneName: Beach
+  targetSceneName: Beach_Night
 --- !u!4 &1684339303
 Transform:
   m_ObjectHideFlags: 0

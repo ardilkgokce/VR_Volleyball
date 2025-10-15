@@ -9,8 +9,8 @@ EditorBuildSettings:
     path: Assets/Scenes/Info.unity
     guid: 76226675011a2fb4eb489e0fb5dd5d64
   - enabled: 1
-    path: Assets/Scenes/Beach.unity
-    guid: 6b6c752fc7416914c92e42e1c4dbe843
+    path: Assets/Scenes/Beach_Night.unity
+    guid: 27eb4c5d8a6422644a482ae05b7ca8e3
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: c348712bda248c246b8c49b3db54643f,
       type: 3}
