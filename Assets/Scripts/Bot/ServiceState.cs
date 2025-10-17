@@ -7,7 +7,6 @@ public class ServiceState : BotState
     private GameObject ball;
     private Transform targetBot;
     private Rigidbody ballRb;
-    private bool isTossing = false;
     private bool hasServed = false;
     private bool shouldPerformHit = false; // FixedUpdate'te vuruş yapılacağını belirtir
     private Vector3 servicePosition; // Servis pozisyonu
@@ -142,8 +141,6 @@ public class ServiceState : BotState
     private void TossBall()
     {
         if (ball == null) return;
-        
-        isTossing = true;
         
         // Parent'tan çıkarmadan önce world pozisyonunu kaydet
         Vector3 ballWorldPos = ball.transform.position;
@@ -321,7 +318,6 @@ public class ServiceState : BotState
         
         bot.isPerformingVolley = false;
         hasServed = false;
-        isTossing = false;
         shouldPerformHit = false;
         Debug.Log($"{bot.gameObject.name} finished serving");
     }

@@ -42,7 +42,6 @@ public class RefereeController : MonoBehaviour
     private float targetHeadValue = 0f;
     private float currentLayerWeight = 0f;
     private Coroutine ballSearchCoroutine;
-    private bool isSearching = false;
     private Vector3 lastKnownBallPosition;
     private float lastBallSeenTime;
     
@@ -51,7 +50,7 @@ public class RefereeController : MonoBehaviour
         InitializeReferee();
         StartBallSearch();
     }
-    
+
     void InitializeReferee()
     {
         // Animator referansını al
@@ -110,7 +109,6 @@ public class RefereeController : MonoBehaviour
                 // Top bulunamazsa kısa bir süre bekle ve tekrar dene
                 if (currentBall == null)
                 {
-                    isSearching = true;
                     yield return new WaitForSeconds(reSearchDelay);
                     
                     // İkinci deneme
@@ -121,14 +119,6 @@ public class RefereeController : MonoBehaviour
                         // Hala bulunamadıysa normal interval'e geç
                         yield return new WaitForSeconds(searchInterval);
                     }
-                    else
-                    {
-                        isSearching = false;
-                    }
-                }
-                else
-                {
-                    isSearching = false;
                 }
             }
             else

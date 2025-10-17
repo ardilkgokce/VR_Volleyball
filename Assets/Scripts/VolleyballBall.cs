@@ -27,7 +27,6 @@ public class VolleyballBall : MonoBehaviour
     
     [Header("UI Settings")]
     public float uiDisplayDuration = 3f; // UI'ın ekranda kalma süresi
-    private float uiTimer = 0f;
     
     // Court manager referansı
     private VolleyballCourtManager courtManager;

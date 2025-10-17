@@ -7,11 +7,6 @@ public class CrowdBatchManager : MonoBehaviour
     [Tooltip("Sahnedeki izleyici karakterlerini buraya sürükleyin")]
     [SerializeField] private List<GameObject> spectators = new List<GameObject>();
     
-    [Header("Sync Settings")]
-    [SerializeField] private bool enableSyncAnimations = true;
-    [SerializeField] private float syncChance = 0.3f; // %30 şans ile birlikte hareket
-    [SerializeField] private int syncGroupSize = 5; // Kaç kişi birlikte hareket edecek
-    
     [Header("Global Events")]
     [SerializeField] private bool enableGlobalEvents = true;
     [SerializeField] private float globalEventInterval = 30f; // Her 30 saniyede bir
