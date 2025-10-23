@@ -27,7 +27,12 @@ public class VolleyballBall : MonoBehaviour
     
     [Header("UI Settings")]
     public float uiDisplayDuration = 3f; // UI'ın ekranda kalma süresi
-    
+
+    [Header("VR Hit Cooldown")]
+    [Tooltip("VR player için minimum vuruş aralığı (saniye). İki el ile ard arda vuruşu engeller.")]
+    public float vrHitCooldown = 0.2f;
+    private float lastVRHitTime = -999f;
+
     // Court manager referansı
     private VolleyballCourtManager courtManager;
     
@@ -78,12 +83,27 @@ public class VolleyballBall : MonoBehaviour
     
     public bool OnHit(Transform hitter, Team hitterTeam)
     {
+        // VR player kontrolü ve cooldown
+        bool isVRPlayer = IsVRPlayer(hitter);
+
+        if (isVRPlayer)
+        {
+            float timeSinceLastVRHit = Time.time - lastVRHitTime;
+            if (timeSinceLastVRHit < vrHitCooldown)
+            {
+                Debug.LogWarning($"VR player hit too soon! Cooldown: {(vrHitCooldown - timeSinceLastVRHit):F2}s remaining. Ignoring hit.");
+                return false;
+            }
+            lastVRHitTime = Time.time;
+            Debug.Log($"VR player hit accepted. Time since last VR hit: {timeSinceLastVRHit:F2}s");
+        }
+
         if (lastHitter == hitter)
         {
             Debug.LogWarning($"{hitter.name} cannot hit the ball twice in a row!");
             return false;
         }
-        
+
         if (hitterTeam != currentTeam)
         {
             currentTeam = hitterTeam;
@@ -296,7 +316,25 @@ public class VolleyballBall : MonoBehaviour
     {
         return currentTeamHits >= maxHitsPerTeam;
     }
-    
+
+    // VR player olup olmadığını kontrol et
+    private bool IsVRPlayer(Transform hitter)
+    {
+        // VRHandController komponenti var mı?
+        if (hitter.GetComponent<VRHandController>() != null)
+        {
+            return true;
+        }
+
+        // Parent'ında VRPlayerProxy var mı?
+        if (hitter.GetComponentInParent<VRPlayerProxy>() != null)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     void OnGUI()
     {
         if (!showDebugInfo || !Application.isPlaying) return;
