@@ -492,90 +492,164 @@ public class BotController : MonoBehaviour
     Transform GetRandomTarget()
     {
         validTargets.Clear();
-        
+
         VolleyballBall volleyballBall = null;
         if (ball != null)
         {
             volleyballBall = ball.GetComponent<VolleyballBall>();
         }
-        
+
         bool mustPassToOpponent = volleyballBall != null && volleyballBall.MustPassToOpponent();
-        
+
+        // VR Player bilgilerini al
+        GameObject vrPlayer = GameObject.FindWithTag("Player");
+        Transform vrPlayerTransform = null;
+        Team vrPlayerTeam = Team.Blue;
+        bool vrPlayerExists = false;
+
+        if (vrPlayer != null)
+        {
+            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
+            if (vrProxy != null)
+            {
+                vrPlayerTransform = vrPlayer.transform;
+                vrPlayerTeam = vrProxy.playerTeam;
+                vrPlayerExists = true;
+            }
+        }
+
+        // ==========================================
+        // DURUM 1: 3. vuruş - rakibe atmak ZORUNLU
+        // ==========================================
         if (mustPassToOpponent)
         {
             Debug.Log($"{gameObject.name} MUST pass to opponent team! (3rd hit)");
-        }
-        
-        for (int i = 0; i < allBots.Length; i++)
-        {
-            if (allBots[i] != null && allBots[i].transform != myTransform)
+
+            // Rakip hedefleri topla
+            for (int i = 0; i < allBots.Length; i++)
             {
-                if (mustPassToOpponent)
+                if (allBots[i] != null && allBots[i].transform != myTransform)
                 {
                     if (allBots[i].team != team)
                     {
                         validTargets.Add(allBots[i].transform);
                     }
                 }
+            }
+
+            // VR player rakipse ekle
+            if (vrPlayerExists && vrPlayerTeam != team)
+            {
+                validTargets.Add(vrPlayerTransform);
+            }
+
+            if (validTargets.Count > 0)
+            {
+                // En uzak rakibi seç
+                if (validTargets.Count > 1)
+                {
+                    Transform farthestTarget = null;
+                    float maxDistance = 0f;
+
+                    foreach (Transform target in validTargets)
+                    {
+                        float dist = Vector3.Distance(myTransform.position, target.position);
+                        if (dist > maxDistance)
+                        {
+                            maxDistance = dist;
+                            farthestTarget = target;
+                        }
+                    }
+
+                    Debug.Log($"{gameObject.name} targeting farthest opponent: {farthestTarget.name}");
+                    return farthestTarget;
+                }
                 else
                 {
-                    validTargets.Add(allBots[i].transform);
+                    Debug.Log($"{gameObject.name} targeting only opponent: {validTargets[0].name}");
+                    return validTargets[0];
                 }
             }
+
+            Debug.LogError($"{gameObject.name} couldn't find opponent target!");
+            return null;
         }
-        
-        GameObject vrPlayer = GameObject.FindWithTag("Player");
-        if (vrPlayer != null)
+
+        // =====================================================
+        // DURUM 2: VR player'ın takım arkadaşı (aynı takım)
+        //          → %100 VR player'a pas at
+        // =====================================================
+        if (vrPlayerExists && vrPlayerTeam == team)
         {
-            VRPlayerProxy vrProxy = vrPlayer.GetComponent<VRPlayerProxy>();
-            if (vrProxy != null)
+            Debug.Log($"{gameObject.name} (teammate) passing to VR Player (100% guaranteed)");
+            return vrPlayerTransform;
+        }
+
+        // =====================================================
+        // DURUM 3: Karşı takım botu (opponent)
+        //          → %50 VR player, %50 diğer botlar
+        // =====================================================
+        if (vrPlayerExists && vrPlayerTeam != team)
+        {
+            // %50 ihtimalle VR player'a at
+            if (Random.value < 0.5f)
             {
-                if (mustPassToOpponent)
+                Debug.Log($"{gameObject.name} (opponent) targeting VR Player (50% chance roll: YES)");
+                return vrPlayerTransform;
+            }
+
+            // %50 ihtimalle diğer botlara at (kendi takım arkadaşları)
+            Debug.Log($"{gameObject.name} (opponent) choosing random bot (50% chance roll: NO, selecting bot)");
+
+            for (int i = 0; i < allBots.Length; i++)
+            {
+                if (allBots[i] != null && allBots[i].transform != myTransform)
                 {
-                    if (vrProxy.playerTeam != team)
+                    // Kendi takımımdan birini seç
+                    if (allBots[i].team == team)
                     {
-                        validTargets.Add(vrPlayer.transform);
+                        validTargets.Add(allBots[i].transform);
                     }
                 }
-                else
-                {
-                    validTargets.Add(vrPlayer.transform);
-                }
             }
-        }
-        
-        if (validTargets.Count > 0)
-        {
-            if (mustPassToOpponent && validTargets.Count > 1)
-            {
-                Transform farthestTarget = null;
-                float maxDistance = 0f;
-                
-                foreach (Transform target in validTargets)
-                {
-                    float dist = Vector3.Distance(myTransform.position, target.position);
-                    if (dist > maxDistance)
-                    {
-                        maxDistance = dist;
-                        farthestTarget = target;
-                    }
-                }
-                
-                Debug.Log($"{gameObject.name} targeting farthest opponent: {farthestTarget.name}");
-                return farthestTarget;
-            }
-            else
+
+            if (validTargets.Count > 0)
             {
                 int randomIndex = Random.Range(0, validTargets.Count);
                 Transform selected = validTargets[randomIndex];
-                
-                Debug.Log($"{gameObject.name} hedef seçti: {selected.name}");
-                
+                Debug.Log($"{gameObject.name} targeting teammate bot: {selected.name}");
                 return selected;
             }
+            else
+            {
+                // Hiç takım arkadaşı bot yoksa VR player'a at
+                Debug.LogWarning($"{gameObject.name} has no teammate bots, defaulting to VR Player");
+                return vrPlayerTransform;
+            }
         }
-        
-        Debug.LogError($"{gameObject.name} couldn't find valid target! MustPassToOpponent: {mustPassToOpponent}");
+
+        // =====================================================
+        // FALLBACK: VR player yoksa eski mantık
+        // =====================================================
+        Debug.LogWarning($"{gameObject.name} - VR player not found, using old random logic");
+
+        for (int i = 0; i < allBots.Length; i++)
+        {
+            if (allBots[i] != null && allBots[i].transform != myTransform)
+            {
+                validTargets.Add(allBots[i].transform);
+            }
+        }
+
+        if (validTargets.Count > 0)
+        {
+            int randomIndex = Random.Range(0, validTargets.Count);
+            Transform selected = validTargets[randomIndex];
+            Debug.Log($"{gameObject.name} hedef seçti: {selected.name}");
+            return selected;
+        }
+
+        Debug.LogError($"{gameObject.name} couldn't find any valid target!");
         return null;
     }
     
