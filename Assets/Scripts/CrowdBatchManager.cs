@@ -39,56 +39,56 @@ public class CrowdBatchManager : MonoBehaviour
             animationControllers.Add(controller);
             
             // Modüler karakter için rastgele görünüm
-            RandomizeAppearance(spectator);
+            //RandomizeAppearance(spectator);
         }
         
         Debug.Log($"Toplam {animationControllers.Count} izleyici başlatıldı.");
     }
     
-    void RandomizeAppearance(GameObject spectator)
-    {
-        // Modüler parçaları rastgele aç/kapa
-        Transform[] allChildren = spectator.GetComponentsInChildren<Transform>(true);
+    //void RandomizeAppearance(GameObject spectator)
+    //{
+    //    // Modüler parçaları rastgele aç/kapa
+    //    Transform[] allChildren = spectator.GetComponentsInChildren<Transform>(true);
         
-        // Saç stilleri
-        List<GameObject> hairOptions = new List<GameObject>();
-        foreach (Transform child in allChildren)
-        {
-            if (child.name.Contains("hair") || child.name.Contains("Hair"))
-            {
-                hairOptions.Add(child.gameObject);
-            }
-        }
+    //    // Saç stilleri
+    //    List<GameObject> hairOptions = new List<GameObject>();
+    //    foreach (Transform child in allChildren)
+    //    {
+    //        if (child.name.Contains("hair") || child.name.Contains("Hair"))
+    //        {
+    //            hairOptions.Add(child.gameObject);
+    //        }
+    //    }
         
-        // Rastgele bir saç stili seç
-        if (hairOptions.Count > 0)
-        {
-            foreach (var hair in hairOptions)
-                hair.SetActive(false);
+    //    // Rastgele bir saç stili seç
+    //    if (hairOptions.Count > 0)
+    //    {
+    //        foreach (var hair in hairOptions)
+    //            hair.SetActive(false);
             
-            int randomHair = Random.Range(0, hairOptions.Count);
-            hairOptions[randomHair].SetActive(true);
-        }
+    //        int randomHair = Random.Range(0, hairOptions.Count);
+    //        hairOptions[randomHair].SetActive(true);
+    //    }
         
-        // Renk varyasyonları
-        SkinnedMeshRenderer[] renderers = spectator.GetComponentsInChildren<SkinnedMeshRenderer>();
-        foreach (var renderer in renderers)
-        {
-            if (renderer.material.HasProperty("_ColorCustomization1"))
-            {
-                // Kıyafet rengi
-                Color clothColor = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.4f, 1f);
-                renderer.material.SetColor("_ColorCustomization1", clothColor);
-            }
+    //    // Renk varyasyonları
+    //    SkinnedMeshRenderer[] renderers = spectator.GetComponentsInChildren<SkinnedMeshRenderer>();
+    //    foreach (var renderer in renderers)
+    //    {
+    //        if (renderer.material.HasProperty("_ColorCustomization1"))
+    //        {
+    //            // Kıyafet rengi
+    //            Color clothColor = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.4f, 1f);
+    //            renderer.material.SetColor("_ColorCustomization1", clothColor);
+    //        }
             
-            if (renderer.material.HasProperty("_ColorCustomization2"))
-            {
-                // Aksesuar rengi
-                Color accessoryColor = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.4f, 1f);
-                renderer.material.SetColor("_ColorCustomization2", accessoryColor);
-            }
-        }
-    }
+    //        if (renderer.material.HasProperty("_ColorCustomization2"))
+    //        {
+    //            // Aksesuar rengi
+    //            Color accessoryColor = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.4f, 1f);
+    //            renderer.material.SetColor("_ColorCustomization2", accessoryColor);
+    //        }
+    //    }
+    //}
     
     void TriggerGlobalEvent()
     {
